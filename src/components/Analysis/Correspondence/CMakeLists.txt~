@@ -1,0 +1,37 @@
+if (WIN32)
+# see http://cmake.org/cmake/help/v2.8.6/cmake.html#module:GenerateExportHeader
+include(GenerateExportHeader)
+add_compiler_export_flags()
+endif (WIN32)
+
+set(LIBRARY_OUTPUT_PATH ../../Test) # for QtPlugin
+
+# --> HarmonicSemantic : QtPlugin [BEGIN]
+set(HarmonicSemantic_Qt_HEADER HarmonicSemanticFilter.h)
+if (WITH_QT5)
+  ADD_DEFINITIONS("-DWITH_QT5")
+  QT5_WRAP_CPP(HarmonicSemantic_Qt_MOC_CPP ${HarmonicSemantic_Qt_HEADER})
+  set(HarmonicSemantic_Qt_SRC ${HarmonicSemantic_Qt_SRC} ${HarmonicSemantic_Qt_MOC_CPP})
+else(WITH_QT5)
+  QT4_WRAP_CPP(HarmonicSemantic_Qt_MOC_CPP ${HarmonicSemantic_Qt_HEADER})
+  set(HarmonicSemantic_Qt_SRC ${HarmonicSemantic_Qt_SRC} ${HarmonicSemantic_Qt_MOC_CPP})
+  set(HarmonicSemantic_Qt_LIB ${HarmonicSemantic_Qt_LIB} ${QT_LIBRARIES})
+endif(WITH_QT5)
+
+add_library(HarmonicSemantic SHARED HarmonicSemanticFilter.cxx ${HarmonicSemantic_Qt_HEADER} ${HarmonicSemantic_Qt_SRC} ../AnalysisBaseTypes.h
+
+./geodesic/geodesic_algorithm_base.h ./geodesic/geodesic_algorithm_exact_elements.h
+./geodesic/geodesic_algorithm_subdivision.h
+./geodesic/geodesic_mesh_elements.h ./geodesic/geodesic_algorithm_exact.h
+./geodesic/geodesic_constants_and_simple_functions.h  ./geodesic/geodesic_mesh.h
+./geodesic/geodesic_algorithm_graph_base.h      ./geodesic/geodesic_memory.h ./Segment.cpp ./Shape.cpp ./Histogram.cpp ./Icdf.cpp
+)
+
+if (WIN32)
+generate_export_header(HarmonicSemantic)
+endif (WIN32)
+target_link_libraries (HarmonicSemantic Kernel ${OPENMESH_LIBRARIES} ${CGAL_LIBRARIES} ${HarmonicSemantic_Qt_LIB} -lX11)
+if (WITH_QT5)
+  QT5_USE_MODULES(HarmonicSemantic Core)
+endif(WITH_QT5)
+# --> HarmonicSemantic : QtPlugin [END]
