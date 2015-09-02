@@ -26,29 +26,30 @@ class Correspondence_Component :
 {
 	public:
 
-		/*!
-		* \brief Constructor
-		*/
 		Correspondence_Component(Viewer* v, PolyhedronPtr p);
-
-		/*!
-		* \brief Destructor
-		*/
+		
 		~Correspondence_Component() {}
 		
+		void initParameters(int nbLabel, int meshId);
 		
+		void learnDescriptor(PolyhedronPtr p);
+		
+		void selectPoint(PolyhedronPtr p);
+		
+		void paintRegion(PolyhedronPtr p);
+		
+		void readSelectionBasedOnColor(PolyhedronPtr p);
+		
+		void compareDescriptorToEllipse(PolyhedronPtr p);
 		
 	private : 
 		
 		int m_nbLabel;
 	
-		//std::vector<double> m_centreDescr;
 		Vertex_handle m_centreSelection;
 		double m_isolineValue;
 		
-		std::vector<double> m_maxVector;
-		
-		//std::vector<double> m_ellipse;
+		std::vector<double> m_maxVector;	
 		
 		bool m_colorCompare2Source;
 		bool m_learningMode;
@@ -56,7 +57,7 @@ class Correspondence_Component :
 		bool m_selectionMode;
 		bool m_readSelection;
 		
-		std::vector<Vertex_handle> & m_selection;
+		std::vector<Vertex_handle> m_selection;
 		std::map<Vertex_handle,int> m_tag;
 		Analysis::Shape m_Shape;
 		geodesic::Mesh m_gmesh;
@@ -71,16 +72,15 @@ class Correspondence_Component :
 		void computeDescriptorAllVertices(PolyhedronPtr p);
 		void computeGeodesicDistancesAllVertices(PolyhedronPtr p);
 		
-		std::vector<double> getClosetVertexDescriptor(PolyhedronPtr p, Point3d pt);
+		std::vector<double> & getClosetVertexDescriptor(PolyhedronPtr p, Point3d pt);
 		
 		void compareToDescrEllipse(PolyhedronPtr p, std::vector<double> & ellipse);
 	
 		void initializeEllipsoid(PolyhedronPtr p);
-		void readSelectionBasedOnColor(PolyyhedronPtr p);
+		
 		
 		Vertex_handle getSelectionCenter();
 		Vertex_handle getFurtherFromSelectionCenter();
-		
 		
 		void tagSelectionVertices(PolyhedronPtr p);
 };

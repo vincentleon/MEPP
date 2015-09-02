@@ -2,7 +2,6 @@
 // Author: Vincent Leon
 // Year: 2015
 // Universite Lille 1, CRIStAL
-//
 ///////////////////////////////////////////////////////////////////////////
 #include <mepp_config.h>
 #ifdef BUILD_component_Correspondence
@@ -18,8 +17,17 @@
 
 Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p)
 {
-	
+	componentName = "Correspondence_Component";
+	init = 1;
 }
+
+void Correspondence_Component::initParameters(int nbLabel, int meshId)
+{
+	m_Shape.m_meshID = meshId;
+	m_nbLabel = nbLabel;
+	m_Shape.initFaceLabelsAndSegments();
+}
+
 
 void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 {
@@ -27,9 +35,9 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 	std::vector<double> points;
 	std::vector<unsigned> faces;
 	std::vector<Vertex_handle> alreadyvisited;
-	
+
 	p->set_index_vertices();
-	
+
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		pVertex != p->vertices_end();
 		++pVertex)
@@ -38,7 +46,7 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 		points.push_back(pVertex->point().y());
 		points.push_back(pVertex->point().z());
 	}
-	
+
 	for( Facet_iterator pFacet = p->facets_begin();
 		pFacet!=p->facets_end();
 		++pFacet)
@@ -50,7 +58,7 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 			faces.push_back(pHalfedge->vertex()->tag());
 		}
 		while(++pHalfedge != pFacet->facet_begin());
-	}	
+	}
 	// initialize geodesic graph and algorithm
         m_gmesh.initialize_mesh_data(points,faces);
         m_geoAlg = new geodesic::GeodesicAlgorithmExact(&m_gmesh);
@@ -104,12 +112,12 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 			} while(iss);
 
 
-			Point3d p = pVertex->point();
+			Point3d pt = pVertex->point();
 
 			//localDescr.push_back(std::sqrt(CGAL::squared_distance(p,bb)));
-			localDescr.push_back( std::abs(p.x() - p->xmin()) );
-			localDescr.push_back( std::abs(p.y() - p->ymin()) );
-			localDescr.push_back( std::abs(p.z() - p->zmin()) );
+			localDescr.push_back( std::abs(pt.x() - p->xmin()) );
+			localDescr.push_back( std::abs(pt.y() - p->ymin()) );
+			localDescr.push_back( std::abs(pt.z() - p->zmin()) );
 			pVertex->setSemantic(localDescr);
 			++pVertex;
 		}
@@ -140,7 +148,7 @@ void Correspondence_Component::normalize(vector< double >& descr)
 {
 	for(unsigned i=0;i<descr.size();++i)
 	{
-		if(max[i]!=std::numeric_limits<double>::infinity())
+		if(m_maxVector[i]!=std::numeric_limits<double>::infinity())
 		{
 			descr[i]/m_maxVector[i];
 		}
@@ -164,7 +172,7 @@ void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr
 			}
 			facetC++;
 		}
-		
+
 		if(sources.size() != 0)
 		{
 			m_geoAlg->propagate(sources);
@@ -172,22 +180,21 @@ void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr
 		else
 		{
 			for(Vertex_iterator pVertex = p->vertices_begin();
-			    pVertex!=p->vertices_end();+pVertex)
+			    pVertex!=p->vertices_end();++pVertex)
 			{
 				pVertex->pushSemantic(std::numeric_limits<double>::infinity());
 			}
-			
+
 		}
-		
+
 		for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 		{
 			int pIndex = pVertex->getIndex();
-			geodesic::SurfacePoint p(&m_gmesh->vertices()[pIndex];
+			geodesic::SurfacePoint pt(&m_gmesh.vertices()[pIndex]);
 			double distance;
-			unsigned best_source = m_geoAlg->best_source(p,distance);
+			unsigned best_source = m_geoAlg->best_source(pt,distance);
 			pVertex->pushSemantic(distance);
-		
 		}
 	}
 }
@@ -195,9 +202,9 @@ void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr
 
 void Correspondence_Component::computeDescriptorAllVertices(PolyhedronPtr p)
 {
-	this->initGeodesicMesh();
-	this->computeGeodesicDistancesAllVertices();
-	this->initMaxVector();
+	this->initGeodesicMesh(p);
+	this->computeGeodesicDistancesAllVertices(p);
+	this->initMaxVector(p);
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 	{
@@ -207,15 +214,41 @@ void Correspondence_Component::computeDescriptorAllVertices(PolyhedronPtr p)
 	}
 }
 
-vector<double> Correspondence_Component::getClosetVertexDescriptor(PolyhedronPtr p, std::vector<double> & pt)
+vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronPtr p, Point3d pickedPoint)
 {
-	//TODO: improve picking
+	double distMin = std::numeric_limits<double>::max();
+	Vertex_iterator cVertex;
+	Facet_iterator cFacet;
+	int i = 0;
+	int min = 0;
+
+		for(Vertex_iterator pVertex = p->vertices_begin();
+			pVertex!=p->vertices_end();
+			++pVertex)
+		{
+			Point3d pt = pVertex->point();
+			double dist = pickedPoint.x() - pt.x();
+			dist = dist*dist;
+			dist += (pickedPoint.y() - pt.y())*(pickedPoint.y()-pt.y());
+			dist += (pickedPoint.z() - pt.z())*(pickedPoint.z()-pt.z());
+			dist = sqrt(dist);
+			if(dist < distMin)
+			{
+				min = i;
+				cVertex = pVertex;
+				distMin = dist;
+			}
+			i++;
+		}
+	std::vector<double> & localDescr = cVertex->getSemantic();
+	std::cout << "closest has been found" << distMin << std::endl;
+	return localDescr;
 }
 
 void Correspondence_Component::compareToDescrEllipse(PolyhedronPtr p, vector< double >& ellipse)
 {
 	std::vector<double> centreDescr = m_centreSelection->getSemantic();
-	
+
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 	{
@@ -243,11 +276,9 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 
 		for(int j=0;j<m_selection.size();++j)
 		{
-			
-			//double dist = L2Dist(m_Semantics[selection[i]],m_Semantics[selection[j]]);
 			double dist = L2Dist(m_selection[i]->getSemantic(),m_selection[j]->getSemantic());
 			score+=dist*dist;
-			
+
 		}
 		if(score<scoreMin)
 		{
@@ -257,7 +288,6 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 	}
 	m_centreSelection->color(0,0,255);
 	return m_centreSelection;
-	}
 }
 
 Vertex_handle Correspondence_Component::getFurtherFromSelectionCenter()
@@ -265,7 +295,7 @@ Vertex_handle Correspondence_Component::getFurtherFromSelectionCenter()
 	double scoreMax = 0;
 	Vertex_handle furtherFromCenter;
 	std::vector<double> & descrCenter = m_centreSelection->getSemantic();
-	
+
 	for(int i=0; i<m_selection.size();++i)
 	{
 		double score = 0.0;
@@ -290,6 +320,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		Vertex_handle v = m_selection[i];
 		m_tag[v] = 1;
 		q.push_back(v);
+		v->color(0,255,0);
 	}
 	while(!q.empty())
 	{
@@ -326,17 +357,17 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 	}
 }
 
-void Correspondence_Component::readSelectionBasedOnColor(PolyyhedronPtr p)
+void Correspondence_Component::readSelectionBasedOnColor(PolyhedronPtr p)
 {
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();
 	    ++pVertex)
 	    {
-		int r = pVertex->color(0);    
+		int r = pVertex->color(0);
 		int g = pVertex->color(1);
 		int b = pVertex->color(2);
 		
-		if( r==255 && g==0 && b==0 )
+		if( r==1 && g==0 && b==0 )
 		{
 			m_selection.push_back(pVertex);
 		}
@@ -344,6 +375,10 @@ void Correspondence_Component::readSelectionBasedOnColor(PolyyhedronPtr p)
 	this->tagSelectionVertices(p);
 }
 
+void Correspondence_Component::selectPoint(PolyhedronPtr p)
+{
+	
+}
 
 
 void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
@@ -355,7 +390,7 @@ void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
 }
 
 
-//// NON-MEMBER FUNCTIONS 
+//// NON-MEMBER FUNCTIONS
 
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
 {

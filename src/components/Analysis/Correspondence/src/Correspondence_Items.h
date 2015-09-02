@@ -52,7 +52,7 @@ class Correspondence_Vertex : virtual public MEPP_Common_Vertex<Refs, T, P, Norm
 
 		Correspondence_Vertex() {}
 		
-		std::vector<double> getSemantic() const
+		std::vector<double> &  getSemantic()
 		{
 			return m_semantic;
 		}
