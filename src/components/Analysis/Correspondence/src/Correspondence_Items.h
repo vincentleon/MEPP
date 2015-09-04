@@ -66,19 +66,8 @@ class Correspondence_Vertex : virtual public MEPP_Common_Vertex<Refs, T, P, Norm
 			m_semantic.push_back(semEl);
 		}
 		
-		void setIndex( int index)
-		{
-			m_index = index;
-		}
-		
-		int getIndex() 
-		{
-			return m_index;
-		}
-		
 	private :
 		std::vector<double> m_semantic;
-		int m_index;
 		
 };
 /*!

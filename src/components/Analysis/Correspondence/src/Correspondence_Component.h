@@ -17,6 +17,8 @@
 
 #include <vector>
 
+#include <nlopt.hpp>
+
 /*!
  * \class Correspondence_Component
  * \brief Correspondence computation on polyhedra
@@ -34,13 +36,21 @@ class Correspondence_Component :
 		
 		void learnDescriptor(PolyhedronPtr p);
 		
+		void readDescriptor(PolyhedronPtr p);
+		
 		void selectPoint(PolyhedronPtr p);
 		
 		void paintRegion(PolyhedronPtr p);
 		
 		void readSelectionBasedOnColor(PolyhedronPtr p);
 		
+		void initializeEllipsoid(PolyhedronPtr p);
+		
 		void compareDescriptorToEllipse(PolyhedronPtr p);
+		
+		void computeEllipseParameters(PolyhedronPtr p);
+		
+		double computeEnergy(const std::vector<double> & ellipse);
 		
 	private : 
 		
@@ -50,6 +60,8 @@ class Correspondence_Component :
 		double m_isolineValue;
 		
 		std::vector<double> m_maxVector;	
+		
+		std::vector<double> m_ellipse;
 		
 		bool m_colorCompare2Source;
 		bool m_learningMode;
@@ -66,7 +78,7 @@ class Correspondence_Component :
 		void initGeodesicMesh(PolyhedronPtr p);
 		
 		void saveDescriptor(PolyhedronPtr p);
-		void readDescriptor(PolyhedronPtr p);
+		
 		void initMaxVector(PolyhedronPtr p);
 		void normalize(std::vector<double> & descr);
 		void computeDescriptorAllVertices(PolyhedronPtr p);
@@ -74,18 +86,18 @@ class Correspondence_Component :
 		
 		std::vector<double> & getClosetVertexDescriptor(PolyhedronPtr p, Point3d pt);
 		
-		void compareToDescrEllipse(PolyhedronPtr p, std::vector<double> & ellipse);
-	
-		void initializeEllipsoid(PolyhedronPtr p);
-		
-		
 		Vertex_handle getSelectionCenter();
 		Vertex_handle getFurtherFromSelectionCenter();
 		
 		void tagSelectionVertices(PolyhedronPtr p);
+		
+
 };
 
 double L2Dist(std::vector<double> & descr1, std::vector<double> & descr2);
+
+double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & grad, void *data);
+
 
 #endif
 

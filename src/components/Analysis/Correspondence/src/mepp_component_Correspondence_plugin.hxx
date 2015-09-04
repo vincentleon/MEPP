@@ -40,20 +40,20 @@ class mepp_component_Correspondence_plugin :
 			this->lwindow = lw;
 			this->mPluginName = this->metaObject()->className();
 			mParentMenu = mainWindow->menuAnalysis_Filtering;
-
-      actionCorrespondence = new QAction(tr("Correspondence"), this);
-      if(actionCorrespondence)
-      {
-        connect(actionCorrespondence, SIGNAL(triggered()),this, SLOT(OnCorrespondence()));
-      }
+			m_hasNotBeenPainted = false;
+			actionCorrespondence = new QAction(tr("Correspondence"), this);
+			if(actionCorrespondence)
+			{
+				connect(actionCorrespondence, SIGNAL(triggered()),this, SLOT(OnCorrespondence()));
+			}
 		}
 
 		QList<QAction*> actions() const
 		{
-      return QList<QAction*>() << actionCorrespondence;
+			return QList<QAction*>() << actionCorrespondence;
 		}
 
-		virtual void pre_draw() {}
+		virtual void pre_draw();
 		virtual void post_draw();
 		virtual void pre_draw_all_scene() {}
 		virtual void post_draw_all_scene() {}
@@ -62,10 +62,14 @@ class mepp_component_Correspondence_plugin :
 		virtual void OnMouseLeftUp(QMouseEvent *event) {}
 		virtual void OnMouseRightDown(QMouseEvent *event) {}
 		virtual void OnMouseRightUp(QMouseEvent *event) {}
-		virtual void OnMouseMotion(QMouseEvent *event) {}
+		virtual void OnMouseMotion(QMouseEvent *event);
 		virtual void OnMouseWheel(QWheelEvent *event) {}
 		virtual void OnKeyPress(QKeyEvent *event) {}
 		virtual void OnKeyRelease(QKeyEvent *event) {}
+		
+		void PaintStart();
+		
+		//QGLFramebufferObject * m_fbo;
 
 	public slots:
 
@@ -73,7 +77,7 @@ class mepp_component_Correspondence_plugin :
 
   private:
     QAction *actionCorrespondence;
-
+    bool m_hasNotBeenPainted;
 };
 
 #endif

@@ -19,13 +19,14 @@ Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) :
 {
 	componentName = "Correspondence_Component";
 	init = 1;
+	p->set_index_vertices();
 }
 
 void Correspondence_Component::initParameters(int nbLabel, int meshId)
 {
 	m_Shape.m_meshID = meshId;
 	m_nbLabel = nbLabel;
-	m_Shape.initFaceLabelsAndSegments();
+	//m_Shape.initFaceLabelsAndSegments();
 }
 
 
@@ -190,7 +191,8 @@ void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr
 		for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 		{
-			int pIndex = pVertex->getIndex();
+			
+			int pIndex = pVertex->tag();
 			geodesic::SurfacePoint pt(&m_gmesh.vertices()[pIndex]);
 			double distance;
 			unsigned best_source = m_geoAlg->best_source(pt,distance);
@@ -245,7 +247,7 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 	return localDescr;
 }
 
-void Correspondence_Component::compareToDescrEllipse(PolyhedronPtr p, vector< double >& ellipse)
+void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 {
 	std::vector<double> centreDescr = m_centreSelection->getSemantic();
 
@@ -257,11 +259,11 @@ void Correspondence_Component::compareToDescrEllipse(PolyhedronPtr p, vector< do
 		for(unsigned l=0;l<localDescr.size();++l)
 		{
 			double diff = localDescr[l]- centreDescr[l];
-			eqEll += (diff*diff/(ellipse[l]*ellipse[l]));
+			eqEll += (diff*diff/(m_ellipse[l]*m_ellipse[l]));
 		}
 		if(eqEll<=1)
 		{
-			pVertex->color(0,255,0);
+			pVertex->color(0,0,0);
 		}
 	}
 }
@@ -286,7 +288,7 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 			m_centreSelection = m_selection[i];
 		}
 	}
-	m_centreSelection->color(0,0,255);
+	m_centreSelection->color(0,0,1);
 	return m_centreSelection;
 }
 
@@ -308,7 +310,7 @@ Vertex_handle Correspondence_Component::getFurtherFromSelectionCenter()
 			furtherFromCenter = m_selection[i];
 		}
 	}
-	furtherFromCenter->color(0,255,0);
+	furtherFromCenter->color(0,1,0);
 	return furtherFromCenter;
 }
 
@@ -320,7 +322,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		Vertex_handle v = m_selection[i];
 		m_tag[v] = 1;
 		q.push_back(v);
-		v->color(0,255,0);
+		v->color(0,1,0);
 	}
 	while(!q.empty())
 	{
@@ -348,11 +350,11 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		Vertex_handle v = m_selection[i];
 		if( m_tag[v] == 2 )
 				{
-			v->color(255,255,0);
+			v->color(1,1,0);
 				}
 		else if (m_tag[v] == 3 )
 		{
-			v->color(0,255,255);
+			v->color(0,1,1);
 		}
 	}
 }
@@ -375,23 +377,71 @@ void Correspondence_Component::readSelectionBasedOnColor(PolyhedronPtr p)
 	this->tagSelectionVertices(p);
 }
 
-void Correspondence_Component::selectPoint(PolyhedronPtr p)
-{
-	
-}
-
 
 void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
 {
 	this->readSelectionBasedOnColor(p);
 	m_centreSelection = getSelectionCenter();
+	m_centreSelection->color(1,0,0);
 	Vertex_handle extremumSelection = getFurtherFromSelectionCenter();
+	extremumSelection->color(1,0,0);
 	m_isolineValue = L2Dist(m_centreSelection->getSemantic(),extremumSelection->getSemantic());
 }
 
+void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
+{
+	m_ellipse = std::vector<double>(m_nbLabel,m_isolineValue);
+	
+	std::vector<double> ell = m_ellipse;
+	
+	int dim = m_ellipse.size();
+	
+	nlopt::opt opt(nlopt::LN_COBYLA,dim);
+	
+	void * data = &(*this);
+	
+	opt.set_min_objective(objectiveFun,data);
+	
+	std::vector<double> lBounds(dim,0.0);
+	opt.set_lower_bounds(lBounds);
+	opt.set_xtol_rel(1e-2);
+	double minf;
+	
+	nlopt::result res = opt.optimize(ell,minf);
+	
+	m_ellipse = ell;
+}
+
+double Correspondence_Component::computeEnergy(const std::vector<double> & ellipse)
+{
+	double energy = 0.0;
+	
+	std::vector<double> cDescr = m_centreSelection->getSemantic();
+	
+	for(unsigned i=0;i<m_selection.size();++i)
+	{
+		Vertex_handle v = m_selection[i];
+		std::vector<double> localDescr = v->getSemantic();
+		double eqEll = 0.0;
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+			double diff = localDescr[l] - cDescr[l];
+			eqEll += (diff*diff/(ellipse[l]*ellipse[l]));
+		}
+		bool inEllipse = (eqEll<=1);
+
+		bool inSelection = (m_tag[v] <=2);
+
+		if(inEllipse != inSelection)
+		{
+			double sqrtM = std::sqrt(eqEll) - 1;
+			energy+=sqrtM*sqrtM;
+		}
+	}
+	return energy;
+}
 
 //// NON-MEMBER FUNCTIONS
-
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
 {
 	double dist = 0.0;
@@ -403,6 +453,13 @@ double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
 		dist += diff*diff;
 	}
 	return sqrt(dist);
+}
+
+double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & grad, void *data)
+{
+	Correspondence_Component * correspondenceComp = (Correspondence_Component *) data;
+	double energy = correspondenceComp->computeEnergy(ellipse);
+	return energy;
 }
 
 

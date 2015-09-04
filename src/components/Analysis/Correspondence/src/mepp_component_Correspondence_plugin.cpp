@@ -11,6 +11,7 @@
 #include <QtPlugin>
 #include <QMessageBox>
 #include <QMdiSubWindow>
+#include <QGLFramebufferObject>
 
 #include "Correspondence_Component.h"
 
@@ -18,7 +19,53 @@ typedef boost::shared_ptr<Correspondence_Component> Correspondence_ComponentPtr;
 
 void mepp_component_Correspondence_plugin::post_draw()
 {
-	// active viewer
+	if (mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		
+		
+		
+	}
+	
+	
+	
+}
+
+
+void mepp_component_Correspondence_plugin::pre_draw()
+{
+	if (mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		//polyhedron_ptr->set_index_vertices();
+		
+		/*glClearStencil(0);
+		glEnable(GL_STENCIL_TEST);
+		glStencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);
+		glPushMatrix();
+		
+		::glBegin(GL_POINTS);
+		::glColor4f(0.0,0.0,0.0,0.0);
+		for (Vertex_iterator pVertex = polyhedron_ptr->vertices_begin();
+			pVertex !=	polyhedron_ptr->vertices_end();	pVertex++)
+		{
+			glStencilFunc(GL_ALWAYS,pVertex->tag()+1,0);
+			std::cout << pVertex->tag() << std::endl;
+			const Point3d& p1 = pVertex->point();
+			::glVertex3f(p1[0],p1[1],p1[2]);
+		}
+		::glEnd();
+		
+		glPopMatrix();
+		glDisable(GL_STENCIL_TEST);*/
+	}
+}
+
+
+void mepp_component_Correspondence_plugin::OnMouseLeftDown(QMouseEvent *event)
+{
 	/*if (mw->activeMdiChild() != 0)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
@@ -26,67 +73,48 @@ void mepp_component_Correspondence_plugin::post_draw()
 
 		if (doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr)) // important !!!
 		{
-			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
-			if (component_ptr->get_init() == 2 && polyhedron_ptr->Correspondence_is_calculated)
+			std::cout<< " PAUL " << std::endl;
+			if(m_hasNotBeenPainted)
 			{
-				glPushMatrix();
-					// here your code
-					if (component_ptr->get_displayMinDirections()==true)
-					{
-						glColor3f(1.0,0.0,0.0);
-						::glBegin(GL_LINES);
-						for (Vertex_iterator pVertex = polyhedron_ptr->vertices_begin();	pVertex !=	polyhedron_ptr->vertices_end();	pVertex++)
-						{
-							{
-
-								float RayonMoyen=polyhedron_ptr->average_edge_length_around(pVertex);
-								const Point3d& p1 = pVertex->point()-0.4*RayonMoyen*(pVertex->VKminCurv);
-								const Point3d& p2 = pVertex->point()+0.4*RayonMoyen*(pVertex->VKminCurv);
-								::glVertex3f(p1[0],p1[1],p1[2]);
-								::glVertex3f(p2[0],p2[1],p2[2]);
-							}
-
-
-			https://www.google.fr/?gfe_rd=cr&ei=wGPkVcbTOoqEcL79MQ			}
-						::glEnd();
-					}
-
-					if (component_ptr->get_displayMaxDirections()==true)
-					{
-						glColor3f(0.0,0.0,1.0);
-						::glBegin(GL_LINES);
-						for (Vertex_iterator pVertex = polyhedron_ptr->vertices_begin();	pVertex !=	polyhedron_ptr->vertices_end();	pVertex++)
-						{
-							{
-
-								float RayonMoyen=polyhedron_ptr->average_edge_length_around(pVertex);
-								const Point3d& p1 = pVertex->point()-0.4*RayonMoyen*(pVertex->VKmaxCurv);
-								const Point3d& p2 = pVertex->point()+0.4*RayonMoyen*(pVertex->VKmaxCurv);
-								::glVertex3f(p1[0],p1[1],p1[2]);
-								::glVertex3f(p2[0],p2[1],p2[2]);
-							}
-
-
-						}
-						::glEnd();
-					}
-				glPopMatrix();
+				int x,y,h,w;
+				x = event->x();
+				y = event->y();
+				h = viewer->height();
+				w = viewer->width();
+				unsigned index;
+				glReadPixels(x,y,1,1,GL_STENCIL_INDEX,GL_UNSIGNED_INT,&index);
+				
+				std::cout << index -1 << std::endl;
 			}
 		}
-	}*/
+ 	}*/
 }
 
-void mepp_component_Correspondence_plugin::OnMouseLeftDown(QMouseEvent *event)
+void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 {
 	if (mw->activeMdiChild() != 0)
 	{
-		/*Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-
+		
+		std::cout << "Paul ";
+		
 		if (doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr)) // important !!!
 		{
-
-		}*/
+			std::cout << "George ";
+			if(true)
+			{
+				/*std::cout << "Ringo ";
+				int x,y,h,w;
+				x = event->x();
+				y = event->y();
+				h = viewer->height();
+				w = viewer->width();
+				unsigned index;
+				glReadPixels(x,y,1,1,GL_STENCIL_INDEX,GL_UNSIGNED_INT,&index);
+				std::cout << index -1 << " ";*/
+			}
+		}
 	}
 }
 
@@ -94,12 +122,13 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 {
 	if (mw->activeMdiChild() != 0)
 	{
+		m_hasNotBeenPainted = true;
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		{
-			int nbLabel = 8;
+			int nbLabel = 8+3;
 			int meshID = 10;
 
 			SettingsDialog dial;
@@ -109,9 +138,17 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 
 				mw->statusBar()->showMessage(tr("Correspondence..."));
 				
-				component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
+				//component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
 				
-				component_ptr->selectPoint(polyhedron_ptr);
+				component_ptr->initParameters(nbLabel,meshID);
+				
+				component_ptr->readDescriptor(polyhedron_ptr);
+				
+				component_ptr->initializeEllipsoid(polyhedron_ptr);
+				
+				component_ptr->computeEllipseParameters(polyhedron_ptr);
+				
+				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
 				
 				mw->statusBar()->showMessage(tr("Correspondence is done"));
 
@@ -124,6 +161,47 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 	QApplication::restoreOverrideCursor();
 	
 }
+
+void mepp_component_Correspondence_plugin::PaintStart()
+{
+	if (mw->activeMdiChild() != 0)
+	{
+		/*Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		m_fbo = new QGLFramebufferObject(viewer->width(),viewer->height());
+		m_fbo->bind();
+		
+		glPushMatrix();
+		
+		::glBegin(GL_TRIANGLES);
+		for (Facet_iterator pFacet = polyhedron_ptr->facets_begin();
+		     pFacet!= polyhedron_ptr->facets_end(); pFacet++)
+		     {
+			Halfedge_around_facet_circulator hE = pFacet->vertices_begin();
+			
+			do{
+				Vertex_handle pVertex = hE->opposite()->vertex();
+				unsigned id = pVertex->tag();
+				unsigned char color[3];
+				color[0] = (id>>16) & 0xFF;
+				color[1] = (id>>8) & 0xFF; 
+				color[2] = id & 0xFF;
+				glColor3ubv(color);
+				
+			}while(++hE!=pFacet->vertices_begin());
+			
+			
+		}
+		::glEnd();
+		
+		glPopMatrix();
+		
+		m_fbo->release();
+		*/
+	}
+	
+}
+
 
 
 #if QT_VERSION < 0x050000

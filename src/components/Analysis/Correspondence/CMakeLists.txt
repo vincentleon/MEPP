@@ -255,6 +255,9 @@ if (FFMPEG_FOUND)
 	target_link_libraries( ${COMPONENT_NAME} ${FFMPEG_LIBRARIES} )
 endif (FFMPEG_FOUND)
 
+target_link_libraries( ${COMPONENT_NAME} -fopenmp -lnlopt )
+
+
 #Documentation
 #option(BUILD_doc_${COMPONENT_NAME} "Build Doxygen documentation for ${COMPONENT_NAME}" ON)
 #if(BUILD_doc_${COMPONENT_NAME})

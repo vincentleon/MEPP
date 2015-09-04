@@ -32,7 +32,7 @@ void mepp_component_Curvature_plugin::post_draw()
 					// here your code
 					if (component_ptr->get_displayMinDirections()==true)
 					{
-						glColor3f(1.0,0.0,0.0);
+						glColor3f(0.0,0.0,0.0);
 						::glBegin(GL_LINES);
 						for (Vertex_iterator pVertex = polyhedron_ptr->vertices_begin();	pVertex !=	polyhedron_ptr->vertices_end();	pVertex++)
 						{
