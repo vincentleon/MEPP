@@ -6,12 +6,14 @@
 #include <QObject>
 
 #include <mepp_config.h>
+
 #ifdef BUILD_component_Correspondence
 
 #include "../../../../mepp/mepp_component_plugin_interface.h"
 
 #include <QAction>
 #include <QtPlugin>
+#include <QGLFramebufferObject>
 
 /**
  \class	mepp_component_Correspondence_plugin
@@ -69,8 +71,8 @@ class mepp_component_Correspondence_plugin :
 		
 		void PaintStart();
 		
-		//QGLFramebufferObject * m_fbo;
-
+		QGLFramebufferObject * m_fbo;
+		
 	public slots:
 
 		void OnCorrespondence();

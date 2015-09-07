@@ -23,9 +23,6 @@ void mepp_component_Correspondence_plugin::post_draw()
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-		
-		
-		
 	}
 	
 	
@@ -60,61 +57,45 @@ void mepp_component_Correspondence_plugin::pre_draw()
 		
 		glPopMatrix();
 		glDisable(GL_STENCIL_TEST);*/
+		this->PaintStart();
+		
 	}
 }
 
 
 void mepp_component_Correspondence_plugin::OnMouseLeftDown(QMouseEvent *event)
 {
-	/*if (mw->activeMdiChild() != 0)
+	if (mw->activeMdiChild() != 0)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-
-		if (doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr)) // important !!!
+		
+		if (!doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr))
 		{
-			std::cout<< " PAUL " << std::endl;
-			if(m_hasNotBeenPainted)
-			{
-				int x,y,h,w;
-				x = event->x();
-				y = event->y();
-				h = viewer->height();
-				w = viewer->width();
-				unsigned index;
-				glReadPixels(x,y,1,1,GL_STENCIL_INDEX,GL_UNSIGNED_INT,&index);
-				
-				std::cout << index -1 << std::endl;
-			}
+			int x,y,h,w;
+			x = event->x();
+			y = event->y();
+			h = viewer->height();
+			w = viewer->width();
+			
+			unsigned char color[3];
+			//m_fbo->bind();
+			glReadPixels(x,h-y,1,1,GL_RGB,GL_UNSIGNED_BYTE,color);
+			std::cout << "x,y :" << x << " " << y << std::endl;
+			std::cout << "color : " << (int)color[0] << " " << (int)color[1] << " " << (int)color[2]<< std::endl;
+			unsigned index = (color[0] << 16) | (color[1] << 8) | color[2];
+			if(index ==  0xFFFFFF){index = -1;}
+			std::cout <<"index : "<< index << "\n";
+			//m_fbo->release();
 		}
- 	}*/
+ 	}
 }
 
 void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 {
 	if (mw->activeMdiChild() != 0)
 	{
-		Viewer* viewer = (Viewer *)mw->activeMdiChild();
-		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		
-		std::cout << "Paul ";
-		
-		if (doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr)) // important !!!
-		{
-			std::cout << "George ";
-			if(true)
-			{
-				/*std::cout << "Ringo ";
-				int x,y,h,w;
-				x = event->x();
-				y = event->y();
-				h = viewer->height();
-				w = viewer->width();
-				unsigned index;
-				glReadPixels(x,y,1,1,GL_STENCIL_INDEX,GL_UNSIGNED_INT,&index);
-				std::cout << index -1 << " ";*/
-			}
-		}
 	}
 }
 
@@ -166,38 +147,44 @@ void mepp_component_Correspondence_plugin::PaintStart()
 {
 	if (mw->activeMdiChild() != 0)
 	{
-		/*Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-		m_fbo = new QGLFramebufferObject(viewer->width(),viewer->height());
-		m_fbo->bind();
+	
 		
-		glPushMatrix();
-		
+		//m_fbo = new QGLFramebufferObject(viewer,viewer,QGLFramebufferObject::Depth);
+		//m_fbo->bind();
+		glDisable(GL_LIGHTING);
+		glClearColor(0.0,0.0,0.0,1.0);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		::glBegin(GL_TRIANGLES);
+		int i = 0;
 		for (Facet_iterator pFacet = polyhedron_ptr->facets_begin();
 		     pFacet!= polyhedron_ptr->facets_end(); pFacet++)
 		     {
-			Halfedge_around_facet_circulator hE = pFacet->vertices_begin();
+			Halfedge_around_facet_circulator hE = pFacet->facet_begin();
 			
 			do{
 				Vertex_handle pVertex = hE->opposite()->vertex();
-				unsigned id = pVertex->tag();
+				//unsigned id = pVertex->tag();
+				unsigned id = i;
+				
 				unsigned char color[3];
 				color[0] = (id>>16) & 0xFF;
 				color[1] = (id>>8) & 0xFF; 
 				color[2] = id & 0xFF;
 				glColor3ubv(color);
+				Point3d p = pVertex->point();
+				glVertex3f(p.x(),p.y(),p.z());
+				i++;
 				
-			}while(++hE!=pFacet->vertices_begin());
+			}while(++hE!=pFacet->facet_begin());
 			
 			
 		}
 		::glEnd();
-		
 		glPopMatrix();
-		
-		m_fbo->release();
-		*/
+		//m_fbo->release();
 	}
 	
 }
