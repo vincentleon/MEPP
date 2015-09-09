@@ -71,6 +71,8 @@ class mepp_component_Correspondence_plugin :
 		virtual void OnKeyPress(QKeyEvent *event) {}
 		virtual void OnKeyRelease(QKeyEvent *event) {}
 		
+		void compareToDataset();
+		
 		void PaintStart(Viewer * view);
 		
 		QGLFramebufferObject * m_fbo;

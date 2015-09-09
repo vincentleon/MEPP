@@ -56,6 +56,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 #    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdocumentation")
   endif( ${CMAKE_BUILD_TYPE} MATCHES "Debug" )
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+
 #------------------------------------------------------------------------------
 # MSVC
 #------------------------------------------------------------------------------
@@ -358,6 +359,7 @@ endif(GLEW_FOUND)
 if (FFMPEG_FOUND)
 	target_link_libraries( ${PRJ_NAME} ${FFMPEG_LIBRARIES} )
 endif (FFMPEG_FOUND)
+
 
 #Documentation
 #option(BUILD_doc_${PRJ_NAME} "Build Doxygen documentation for ${PRJ_NAME}" ON)

@@ -152,6 +152,8 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					
 					component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
 					
+					
+					
 					mw->statusBar()->showMessage(tr("Correspondence is done"));
 
 					component_ptr->set_init(2);
@@ -216,6 +218,26 @@ void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 		glShadeModel(GL_SMOOTH);
 	
 }
+
+void mepp_component_Correspondence_plugin::compareToDataset()
+{
+	Viewer* viewerI = NULL;
+	
+	PolyhedronPtr polyhedron_ptr_out;
+	
+	emit(mw->get_actionNewEmpty()->trigger());
+	
+	for(int i=0; i<lwindow.size();i++)
+	{
+		viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+		if(viewerI->getScenePtr()->get_polyhedron()->empty())
+		{
+			polyhedron_ptr_out = viewerI->getScenePtr()->get_polyhedron();
+			
+		}
+	}
+}
+
 
 
 
