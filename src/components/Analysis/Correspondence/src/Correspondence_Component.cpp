@@ -43,7 +43,7 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 		pVertex != p->vertices_end();
 		++pVertex)
 	{
-		points.push_back(pVertex->point().x());// add the vertex to the list of vertices
+		points.push_back(pVertex->point().x()); // add the vertex to the list of vertices
 		points.push_back(pVertex->point().y());
 		points.push_back(pVertex->point().z());
 	}
@@ -116,9 +116,9 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 			Point3d pt = pVertex->point();
 
 			//localDescr.push_back(std::sqrt(CGAL::squared_distance(p,bb)));
-			localDescr.push_back( std::abs(pt.x() - p->xmin()) );
+			/*localDescr.push_back( std::abs(pt.x() - p->xmin()) );
 			localDescr.push_back( std::abs(pt.y() - p->ymin()) );
-			localDescr.push_back( std::abs(pt.z() - p->zmin()) );
+			localDescr.push_back( std::abs(pt.z() - p->zmin()) );*/
 			pVertex->setSemantic(localDescr);
 			++pVertex;
 		}
@@ -265,6 +265,10 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		{
 			pVertex->color(0,0,0);
 		}
+		else
+		{
+			pVertex->color(0.5,0.5,0.5);
+		}
 	}
 }
 
@@ -288,7 +292,7 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 			m_centreSelection = m_selection[i];
 		}
 	}
-	m_centreSelection->color(0,0,1);
+	//m_centreSelection->(0,0,1);
 	return m_centreSelection;
 }
 
@@ -310,7 +314,7 @@ Vertex_handle Correspondence_Component::getFurtherFromSelectionCenter()
 			furtherFromCenter = m_selection[i];
 		}
 	}
-	furtherFromCenter->color(0,1,0);
+	//furtherFromCenter->color(0,1,0);
 	return furtherFromCenter;
 }
 
@@ -380,11 +384,11 @@ void Correspondence_Component::readSelectionBasedOnColor(PolyhedronPtr p)
 
 void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
 {
-	this->readSelectionBasedOnColor(p);
+	//this->readSelectionBasedOnColor(p);
 	m_centreSelection = getSelectionCenter();
-	m_centreSelection->color(1,0,0);
+	//m_centreSelection->color(1,0,0);
 	Vertex_handle extremumSelection = getFurtherFromSelectionCenter();
-	extremumSelection->color(1,0,0);
+	//extremumSelection->color(1,0,0);
 	m_isolineValue = L2Dist(m_centreSelection->getSemantic(),extremumSelection->getSemantic());
 }
 

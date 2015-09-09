@@ -14,6 +14,7 @@
 #include <QAction>
 #include <QtPlugin>
 #include <QGLFramebufferObject>
+#include <set>
 
 /**
  \class	mepp_component_Correspondence_plugin
@@ -42,7 +43,8 @@ class mepp_component_Correspondence_plugin :
 			this->lwindow = lw;
 			this->mPluginName = this->metaObject()->className();
 			mParentMenu = mainWindow->menuAnalysis_Filtering;
-			m_hasNotBeenPainted = false;
+			m_hasNotBeenPainted = true;
+			
 			actionCorrespondence = new QAction(tr("Correspondence"), this);
 			if(actionCorrespondence)
 			{
@@ -61,7 +63,7 @@ class mepp_component_Correspondence_plugin :
 		virtual void post_draw_all_scene() {}
 
 		virtual void OnMouseLeftDown(QMouseEvent *event);
-		virtual void OnMouseLeftUp(QMouseEvent *event) {}
+		virtual void OnMouseLeftUp(QMouseEvent *event);
 		virtual void OnMouseRightDown(QMouseEvent *event) {}
 		virtual void OnMouseRightUp(QMouseEvent *event) {}
 		virtual void OnMouseMotion(QMouseEvent *event);
@@ -69,9 +71,13 @@ class mepp_component_Correspondence_plugin :
 		virtual void OnKeyPress(QKeyEvent *event) {}
 		virtual void OnKeyRelease(QKeyEvent *event) {}
 		
-		void PaintStart();
+		void PaintStart(Viewer * view);
 		
 		QGLFramebufferObject * m_fbo;
+		std::set<int> m_paintedFacets;
+		std::vector<Facet_handle> m_facets; // Random access to faces
+		
+		
 		
 	public slots:
 
