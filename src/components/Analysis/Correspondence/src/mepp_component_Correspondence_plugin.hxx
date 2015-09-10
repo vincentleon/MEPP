@@ -16,6 +16,10 @@
 #include <QGLFramebufferObject>
 #include <set>
 
+#include "Correspondence_Component.h"
+
+typedef boost::shared_ptr<Correspondence_Component> Correspondence_ComponentPtr;
+
 /**
  \class	mepp_component_Correspondence_plugin
 
@@ -71,7 +75,7 @@ class mepp_component_Correspondence_plugin :
 		virtual void OnKeyPress(QKeyEvent *event) {}
 		virtual void OnKeyRelease(QKeyEvent *event) {}
 		
-		void compareToDataset();
+		void compareToDataset(Correspondence_ComponentPtr sourceCorrespondence);
 		
 		void PaintStart(Viewer * view);
 		

@@ -52,11 +52,22 @@ class Correspondence_Component :
 		
 		double computeEnergy(const std::vector<double> & ellipse);
 		
+		std::vector<double> getCentreDescr() const;
+		
+		void setCentreDescriptor(const std::vector<double> & centreDescr);
+		
+		std::vector<double> getEllipse() const;
+		
+		void setEllipse(const std::vector<double> & ellipse);
+		
 	private : 
 		
 		int m_nbLabel;
 	
 		Vertex_handle m_centreSelection;
+		
+		std::vector<double> m_centreDescriptor;
+		
 		double m_isolineValue;
 		
 		std::vector<double> m_maxVector;	

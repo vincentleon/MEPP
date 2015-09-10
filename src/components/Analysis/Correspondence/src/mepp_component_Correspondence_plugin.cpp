@@ -13,9 +13,6 @@
 #include <QMdiSubWindow>
 #include <QGLFramebufferObject>
 
-#include "Correspondence_Component.h"
-
-typedef boost::shared_ptr<Correspondence_Component> Correspondence_ComponentPtr;
 
 void mepp_component_Correspondence_plugin::post_draw()
 {
@@ -158,6 +155,8 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 
 					component_ptr->set_init(2);
 					viewer->recreateListsAndUpdateGL();
+					
+					compareToDataset(component_ptr);
 				}
 			}
 		}
@@ -219,7 +218,7 @@ void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 	
 }
 
-void mepp_component_Correspondence_plugin::compareToDataset()
+void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_ComponentPtr sourceCorrespondence)
 {
 	Viewer* viewerI = NULL;
 	
@@ -227,13 +226,22 @@ void mepp_component_Correspondence_plugin::compareToDataset()
 	
 	emit(mw->get_actionNewEmpty()->trigger());
 	
+	
 	for(int i=0; i<lwindow.size();i++)
 	{
 		viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
 		if(viewerI->getScenePtr()->get_polyhedron()->empty())
 		{
-			polyhedron_ptr_out = viewerI->getScenePtr()->get_polyhedron();
+			viewerI->getScenePtr()->add_mesh("/home/leon/11.off",0,NULL,viewerI);
 			
+			PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
+			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+			component_ptr->initParameters(8,10);
+			component_ptr->readDescriptor(polyhedron_ptr);
+			component_ptr->setEllipse(sourceCorrespondence->getEllipse());
+			component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
+			component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+			viewerI->recreateListsAndUpdateGL();
 		}
 	}
 }

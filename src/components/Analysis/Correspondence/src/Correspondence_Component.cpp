@@ -14,6 +14,7 @@
 #include "Correspondence_Component.h"
 #include "Correspondence_Polyhedron.h"
 #include "geodesic/geodesic_algorithm_exact.h"
+//#include <../../Gharial/Src/DataStructures/CGAL/EnrichedPolyhedron/CGAL_EnrichedPolyhedron.hxx.BACKUP.4484.hxx>
 
 Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p)
 {
@@ -249,7 +250,7 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 
 void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 {
-	std::vector<double> centreDescr = m_centreSelection->getSemantic();
+	std::vector<double> centreDescr = m_centreDescriptor;
 
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
@@ -290,6 +291,7 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 		{
 			scoreMin=score;
 			m_centreSelection = m_selection[i];
+			m_centreDescriptor = m_centreSelection->getSemantic();
 		}
 	}
 	//m_centreSelection->(0,0,1);
@@ -444,6 +446,28 @@ double Correspondence_Component::computeEnergy(const std::vector<double> & ellip
 	}
 	return energy;
 }
+
+std::vector< double > Correspondence_Component::getCentreDescr() const
+{
+	return m_centreDescriptor;
+}
+
+std::vector< double > Correspondence_Component::getEllipse() const
+{
+	return m_ellipse;
+}
+
+void Correspondence_Component::setCentreDescriptor(const std::vector<double> & centreDescr)
+{
+	m_centreDescriptor = centreDescr;
+}
+
+
+void Correspondence_Component::setEllipse(const vector<double> & ellipse)
+{
+	m_ellipse = ellipse;
+}
+
 
 //// NON-MEMBER FUNCTIONS
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
