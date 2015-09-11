@@ -14,7 +14,8 @@
 #include "Correspondence_Component.h"
 #include "Correspondence_Polyhedron.h"
 #include "geodesic/geodesic_algorithm_exact.h"
-//#include <../../Gharial/Src/DataStructures/CGAL/EnrichedPolyhedron/CGAL_EnrichedPolyhedron.hxx.BACKUP.4484.hxx>
+
+
 
 Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p)
 {
@@ -27,7 +28,7 @@ void Correspondence_Component::initParameters(int nbLabel, int meshId)
 {
 	m_Shape.m_meshID = meshId;
 	m_nbLabel = nbLabel;
-	//m_Shape.initFaceLabelsAndSegments();
+	m_Shape.initFaceLabelsAndSegments();
 }
 
 
@@ -273,6 +274,41 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 	}
 }
 
+/*void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
+{
+	std::vector<double> centreDescr = m_centreDescriptor;
+	
+	myVector mu(m_centreDescriptor.size());
+	for(unsigned l=0;l<m_centreDescriptor.size();++l)
+	{
+		mu[l] = m_centreDescriptor[l];
+	}
+	
+	for(Vertex_iterator pVertex = p->vertices_begin();
+	    pVertex!=p->vertices_end();++pVertex)
+	    {
+		std::vector<double> localDescr = pVertex->getSemantic();
+		myVector x(localDescr.size());
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+			x[l] = m_centreDescriptor[l];
+		}
+		float gauss = 1.0/(pow(2*3.14159265358979,m_nbLabel)*sqrt(determinant(m_gaussianMatrix)));
+		gauss *= exp(-0.5*(x-mu) * inverse(m_gaussianMatrix) * (x-mu);
+		
+		if(gauss < 0.1)
+		{
+			pVertex->color(0.5,0.5,0.5);
+		}
+		else
+		{
+			pVertex->color(0,0,0);
+		}
+		
+	    }
+}*/
+
+
 Vertex_handle Correspondence_Component::getSelectionCenter()
 {
 	double scoreMin = std::numeric_limits<double>::max();
@@ -316,7 +352,6 @@ Vertex_handle Correspondence_Component::getFurtherFromSelectionCenter()
 			furtherFromCenter = m_selection[i];
 		}
 	}
-	//furtherFromCenter->color(0,1,0);
 	return furtherFromCenter;
 }
 
@@ -410,13 +445,45 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	
 	std::vector<double> lBounds(dim,0.0);
 	opt.set_lower_bounds(lBounds);
-	opt.set_xtol_rel(1e-4);
+	opt.set_xtol_rel(1e-2);
 	double minf;
 	
 	nlopt::result res = opt.optimize(ell,minf);
 	
 	m_ellipse = ell;
 }
+
+/*void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
+{
+	std::vector<double> stdev(m_nbLabel,0.0);
+	
+	for(unsigned i=0;i<m_selection.size();++i)
+	{
+		Vertex_handle v = m_selection[i];
+		std::vector<double> localDescr = v->getSemantic();
+		
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+			float diff = (localDescr[l]-m_centreDescriptor[l]);
+			stdev[l] += (diff*diff);
+		}
+	}
+	
+	for(unsigned l=0;l<stdev.size();++l)
+	{
+		stdev[l]=sqrt(stdev[l]/p->size_of_vertices());
+	}
+	
+	myMatrix eps(m_nbLabel,m_nbLabel);
+	for(unsigned i=0;i<m_nbLabel;++i)
+	{
+		for(unsigned j=0;j<m_nbLabel;++j)
+		{
+			eps[i][j] = stdev[i]*stdev[j];
+		}
+	}
+}*/
+
 
 double Correspondence_Component::computeEnergy(const std::vector<double> & ellipse)
 {

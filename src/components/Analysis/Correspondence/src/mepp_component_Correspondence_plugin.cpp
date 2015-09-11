@@ -144,10 +144,15 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					component_ptr->readDescriptor(polyhedron_ptr);
 					
 					component_ptr->initializeEllipsoid(polyhedron_ptr);
+					viewer->recreateListsAndUpdateGL();
+					
+					
 					
 					component_ptr->computeEllipseParameters(polyhedron_ptr);
 					
 					component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+					
+					
 					
 					mw->statusBar()->showMessage(tr("Correspondence is done"));
 

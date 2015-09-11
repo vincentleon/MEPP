@@ -19,6 +19,12 @@
 
 #include <nlopt.hpp>
 
+#include "CGAL/Linear_algebraCd.h"
+
+typedef CGAL::Linear_algebraCd<double>::Matrix myMatrix;
+typedef CGAL::Linear_algebraCd<double>::Vector myVector;
+
+
 /*!
  * \class Correspondence_Component
  * \brief Correspondence computation on polyhedra
@@ -48,7 +54,11 @@ class Correspondence_Component :
 		
 		void compareDescriptorToEllipse(PolyhedronPtr p);
 		
+		//void compareDescriptorToGaussian(PolyhedronPtr p);
+		
 		void computeEllipseParameters(PolyhedronPtr p);
+		
+		//void computeGaussianParameters(PolyhedronPtr p);
 		
 		double computeEnergy(const std::vector<double> & ellipse);
 		
@@ -73,6 +83,8 @@ class Correspondence_Component :
 		std::vector<double> m_maxVector;	
 		
 		std::vector<double> m_ellipse;
+		
+		myMatrix m_gaussianMatrix;
 		
 		bool m_colorCompare2Source;
 		bool m_learningMode;
