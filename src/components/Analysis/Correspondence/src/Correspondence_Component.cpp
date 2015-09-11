@@ -94,7 +94,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 	Point3d bb = Point3d(p->xmin(),p->ymin(),p->zmin());
 	std::ifstream file;
 	std::stringstream ss;
-	ss<<m_Shape.m_meshID<<".semantic";
+	ss<<"/home/leon/datasetHuman/"<<m_Shape.m_meshID<<".semantic";
 	file.open(ss.str().c_str());
 	Vertex_iterator pVertex = p->vertices_begin();
 	if(file)
@@ -114,12 +114,12 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 			} while(iss);
 
 
-			Point3d pt = pVertex->point();
+			//Point3d pt = pVertex->point();
 
 			//localDescr.push_back(std::sqrt(CGAL::squared_distance(p,bb)));
-			/*localDescr.push_back( std::abs(pt.x() - p->xmin()) );
-			localDescr.push_back( std::abs(pt.y() - p->ymin()) );
-			localDescr.push_back( std::abs(pt.z() - p->zmin()) );*/
+			//localDescr.push_back( std::abs(pt.x() - p->xmin()) );
+			//localDescr.push_back( std::abs(pt.y() - p->ymin()) );
+			//localDescr.push_back( std::abs(pt.z() - p->zmin()) );
 			pVertex->setSemantic(localDescr);
 			++pVertex;
 		}
@@ -410,7 +410,7 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	
 	std::vector<double> lBounds(dim,0.0);
 	opt.set_lower_bounds(lBounds);
-	opt.set_xtol_rel(1e-2);
+	opt.set_xtol_rel(1e-4);
 	double minf;
 	
 	nlopt::result res = opt.optimize(ell,minf);

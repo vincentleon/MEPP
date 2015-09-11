@@ -149,14 +149,12 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					
 					component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
 					
-					
-					
 					mw->statusBar()->showMessage(tr("Correspondence is done"));
 
 					component_ptr->set_init(2);
 					viewer->recreateListsAndUpdateGL();
 					
-					compareToDataset(component_ptr);
+					compareToDataset(component_ptr,meshID);
 				}
 			}
 		}
@@ -218,30 +216,35 @@ void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 	
 }
 
-void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_ComponentPtr sourceCorrespondence)
+void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_ComponentPtr sourceCorrespondence, int sourceID)
 {
 	Viewer* viewerI = NULL;
 	
 	PolyhedronPtr polyhedron_ptr_out;
 	
-	emit(mw->get_actionNewEmpty()->trigger());
-	
-	
-	for(int i=0; i<lwindow.size();i++)
+	for(int m = 1; m <=20; ++m)
 	{
-		viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
-		if(viewerI->getScenePtr()->get_polyhedron()->empty())
+		if(m == sourceID) {continue;}
+		emit(mw->get_actionNewEmpty()->trigger());
+		
+		for(int i=0; i<lwindow.size();i++)
 		{
-			viewerI->getScenePtr()->add_mesh("/home/leon/11.off",0,NULL,viewerI);
-			
-			PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
-			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
-			component_ptr->initParameters(8,10);
-			component_ptr->readDescriptor(polyhedron_ptr);
-			component_ptr->setEllipse(sourceCorrespondence->getEllipse());
-			component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
-			component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
-			viewerI->recreateListsAndUpdateGL();
+			viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+			if(viewerI->getScenePtr()->get_polyhedron()->empty())
+			{
+				std::stringstream ss;
+				ss << "/home/leon/datasetHuman/" << m << ".off";
+				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
+				
+				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
+				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+				component_ptr->initParameters(8,m);
+				component_ptr->readDescriptor(polyhedron_ptr);
+				component_ptr->setEllipse(sourceCorrespondence->getEllipse());
+				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
+				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+				viewerI->recreateListsAndUpdateGL();
+			}
 		}
 	}
 }
