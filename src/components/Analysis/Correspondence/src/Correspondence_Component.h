@@ -54,11 +54,11 @@ class Correspondence_Component :
 		
 		void compareDescriptorToEllipse(PolyhedronPtr p);
 		
-		//void compareDescriptorToGaussian(PolyhedronPtr p);
+		void compareDescriptorToGaussian(PolyhedronPtr p);
 		
 		void computeEllipseParameters(PolyhedronPtr p);
 		
-		//void computeGaussianParameters(PolyhedronPtr p);
+		void computeGaussianParameters(PolyhedronPtr p);
 		
 		double computeEnergy(const std::vector<double> & ellipse);
 		

@@ -15,8 +15,6 @@
 #include "Correspondence_Polyhedron.h"
 #include "geodesic/geodesic_algorithm_exact.h"
 
-
-
 Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p)
 {
 	componentName = "Correspondence_Component";
@@ -274,7 +272,7 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 	}
 }
 
-/*void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
+void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 {
 	std::vector<double> centreDescr = m_centreDescriptor;
 	
@@ -284,6 +282,29 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		mu[l] = m_centreDescriptor[l];
 	}
 	
+	myMatrix I,D;
+	myVector C;
+	std::vector<int> vv;
+	double dd;
+		
+	std::cout << std::endl;
+	std::cout << "Matrix : " << std::endl;
+	for(unsigned i = 0;i<m_nbLabel;++i)
+	{
+		for(unsigned j = 0;j<m_nbLabel;++j)
+		{
+			std::cout << m_gaussianMatrix[i][j] << " ";
+		}
+		std::cout << std::endl;
+	}
+	double det = Linear_algebraCd<double>::determinant(m_gaussianMatrix,I,D,vv,C);
+ 	std::cout << "determinant : " << det << std::endl;
+	
+	myMatrix inverse = Linear_algebraCd<double>::inverse(m_gaussianMatrix,dd);
+	
+	double power = pow(2*3.14159,m_nbLabel);
+	double norm = 1.0/(sqrt(power)*det);
+	
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	    {
@@ -291,12 +312,18 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		myVector x(localDescr.size());
 		for(unsigned l=0;l<localDescr.size();++l)
 		{
-			x[l] = m_centreDescriptor[l];
+ 			x[l] = localDescr[l];
 		}
-		float gauss = 1.0/(pow(2*3.14159265358979,m_nbLabel)*sqrt(determinant(m_gaussianMatrix)));
-		gauss *= exp(-0.5*(x-mu) * inverse(m_gaussianMatrix) * (x-mu);
+			
+		myVector distToMean = x -mu;
+		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
+		myVector arg = -0.5*(Linear_algebraCd<double>::transpose(distToMean) * ((Linear_algebraCd<double>::inverse(m_gaussianMatrix,det) * (distToMean))));
+			
+		double gauss = norm * exp(arg[0]);
 		
-		if(gauss < 0.1)
+		std::cout << "gauss : " << gauss << std::endl;
+		
+		if(std::abs(gauss)<0.001)
 		{
 			pVertex->color(0.5,0.5,0.5);
 		}
@@ -306,7 +333,7 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		}
 		
 	    }
-}*/
+}
 
 
 Vertex_handle Correspondence_Component::getSelectionCenter()
@@ -453,36 +480,47 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	m_ellipse = ell;
 }
 
-/*void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
-{
+void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
+{	
+	m_centreSelection = getSelectionCenter();
+	
 	std::vector<double> stdev(m_nbLabel,0.0);
+	
+	//m_gaussianMatrix(m_nbLabel,m_nbLabel);
+	
+	myMatrix sig(m_nbLabel,m_nbLabel);
 	
 	for(unsigned i=0;i<m_selection.size();++i)
 	{
 		Vertex_handle v = m_selection[i];
 		std::vector<double> localDescr = v->getSemantic();
 		
-		for(unsigned l=0;l<localDescr.size();++l)
+		for(unsigned i=0;i<m_nbLabel;++i)
 		{
-			float diff = (localDescr[l]-m_centreDescriptor[l]);
-			stdev[l] += (diff*diff);
+			double t1 = localDescr[i] - m_centreDescriptor[i];
+			for(unsigned j=0;j<m_nbLabel;++j)
+			{
+				sig[i][j] += t1 * (localDescr[j] - m_centreDescriptor[j]);
+			}
 		}
 	}
+	m_gaussianMatrix = (1.0/m_selection.size()-1) * sig;
 	
-	for(unsigned l=0;l<stdev.size();++l)
+	/*for(unsigned l=0;l<stdev.size();++l)
 	{
-		stdev[l]=sqrt(stdev[l]/p->size_of_vertices());
-	}
+		stdev[l]=sqrt(stdev[l]/m_selection.size());
+		std::cout << stdev[l] << " " << m_centreDescriptor[l] << std::endl;
+	}*/
 	
-	myMatrix eps(m_nbLabel,m_nbLabel);
+	/*myMatrix sig(m_nbLabel,m_nbLabel);
 	for(unsigned i=0;i<m_nbLabel;++i)
 	{
 		for(unsigned j=0;j<m_nbLabel;++j)
 		{
-			eps[i][j] = stdev[i]*stdev[j];
+			
 		}
-	}
-}*/
+	}*/
+}
 
 
 double Correspondence_Component::computeEnergy(const std::vector<double> & ellipse)
