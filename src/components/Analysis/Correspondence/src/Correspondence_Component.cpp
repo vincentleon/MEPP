@@ -119,6 +119,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 			//localDescr.push_back( std::abs(pt.x() - p->xmin()) );
 			//localDescr.push_back( std::abs(pt.y() - p->ymin()) );
 			//localDescr.push_back( std::abs(pt.z() - p->zmin()) );
+			
 			pVertex->setSemantic(localDescr);
 			++pVertex;
 		}
@@ -128,6 +129,17 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 		std::cout << "Impossible d'ouvrir le fichier "<<ss.str()<<" !\n";
 	}
 }
+
+void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
+{
+	for(Vertex_iterator pVertex = p->vertices_begin();
+	    pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> & localDescr = pVertex->getSemantic();
+		pVertex->color(localDescr[dim],0.5,1.0-localDescr[dim]);
+	}
+}
+
 
 void Correspondence_Component::initMaxVector(PolyhedronPtr p)
 {

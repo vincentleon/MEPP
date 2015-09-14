@@ -143,23 +143,33 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					
 					component_ptr->readDescriptor(polyhedron_ptr);
 					
+					int i=0;
+					while(i<nbLabel)
+					{
+						component_ptr->showDescriptor(polyhedron_ptr,i);
+						viewer->recreateListsAndUpdateGL();
+						unsigned uu;
+						std::cin >> uu;
+						i++;
+					}
+					
 					//component_ptr->computeGaussianParameters(polyhedron_ptr);
 					
 					//component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
 
-					component_ptr->initializeEllipsoid(polyhedron_ptr);
+					//component_ptr->initializeEllipsoid(polyhedron_ptr);
 					//viewer->recreateListsAndUpdateGL();
 					
-					component_ptr->computeEllipseParameters(polyhedron_ptr);
+					/*component_ptr->computeEllipseParameters(polyhedron_ptr);
 					
 					component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
 					
 					mw->statusBar()->showMessage(tr("Correspondence is done"));
-
+*/
 					component_ptr->set_init(2);
 					viewer->recreateListsAndUpdateGL();
 					
-					compareToDataset(component_ptr,meshID);
+					//compareToDataset(component_ptr,meshID);
 				}
 			}
 		}
