@@ -22,9 +22,6 @@ void mepp_component_Correspondence_plugin::post_draw()
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		
 	}
-	
-	
-	
 }
 
 
@@ -104,6 +101,26 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 	}
 }
 
+void mepp_component_Correspondence_plugin::showDescriptor()
+{
+	if(mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		
+		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
+		int nbLabel = 8;
+		int meshID = 10;
+		component_ptr->initParameters(nbLabel,meshID);
+					
+		component_ptr->readDescriptor(polyhedron_ptr);
+		component_ptr->showDescriptor(polyhedron_ptr,m_currentLabel);
+		m_currentLabel = (m_currentLabel + 1) % 8;
+		viewer->recreateListsAndUpdateGL();
+	}
+}
+
+
 void mepp_component_Correspondence_plugin::OnCorrespondence()
 {
 	
@@ -143,7 +160,7 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					
 					component_ptr->readDescriptor(polyhedron_ptr);
 					
-					int i=0;
+					/*int i=0;
 					while(i<nbLabel)
 					{
 						component_ptr->showDescriptor(polyhedron_ptr,i);
@@ -151,11 +168,17 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 						unsigned uu;
 						std::cin >> uu;
 						i++;
-					}
+					}*/
 					
-					//component_ptr->computeGaussianParameters(polyhedron_ptr);
+					/*component_ptr->initializeEllipsoid(polyhedron_ptr);
 					
-					//component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
+					component_ptr->computeEllipseParametersRotation(polyhedron_ptr);
+					
+					component_ptr->compareDescriptorToEllipseRotation(polyhedron_ptr);*/
+					
+					component_ptr->computeGaussianParameters(polyhedron_ptr);
+					
+					component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
 
 					//component_ptr->initializeEllipsoid(polyhedron_ptr);
 					//viewer->recreateListsAndUpdateGL();
@@ -169,7 +192,7 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					component_ptr->set_init(2);
 					viewer->recreateListsAndUpdateGL();
 					
-					//compareToDataset(component_ptr,meshID);
+					compareToDataset(component_ptr,meshID);
 				}
 			}
 		}
@@ -253,12 +276,19 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 				
 				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
 				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
-				component_ptr->initParameters(8,m);
+				/*component_ptr->initParameters(8,m);
 				component_ptr->readDescriptor(polyhedron_ptr);
 				component_ptr->setEllipse(sourceCorrespondence->getEllipse());
 				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
 				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
-				viewerI->recreateListsAndUpdateGL();
+				viewerI->recreateListsAndUpdateGL();*/
+				
+				component_ptr->initParameters(8,m);	
+				component_ptr->readDescriptor(polyhedron_ptr);
+				//component_ptr->setMatrix(sourceCorrespondence->getMatrix());
+				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
+				component_ptr->computeGaussianParameters(polyhedron_ptr);	
+				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
 			}
 		}
 	}

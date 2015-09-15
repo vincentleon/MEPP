@@ -39,7 +39,10 @@ class mepp_component_Correspondence_plugin :
 	public:
 		mepp_component_Correspondence_plugin() : mepp_component_plugin_interface() {}
 		~mepp_component_Correspondence_plugin()
-		{}
+		{
+			delete actionCorrespondence;
+			delete actionShowDescriptor;
+		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
 		{
@@ -48,17 +51,26 @@ class mepp_component_Correspondence_plugin :
 			this->mPluginName = this->metaObject()->className();
 			mParentMenu = mainWindow->menuAnalysis_Filtering;
 			m_hasNotBeenPainted = true;
+			m_currentLabel = 0;
 			
 			actionCorrespondence = new QAction(tr("Correspondence"), this);
 			if(actionCorrespondence)
 			{
 				connect(actionCorrespondence, SIGNAL(triggered()),this, SLOT(OnCorrespondence()));
 			}
+			
+			actionShowDescriptor = new QAction(tr("Show descriptor"), this);
+			if( actionShowDescriptor )
+			{
+				connect(actionShowDescriptor, SIGNAL(triggered()),this, SLOT(showDescriptor()));
+			}
 		}
 
 		QList<QAction*> actions() const
 		{
-			return QList<QAction*>() << actionCorrespondence;
+			return QList<QAction*>() << actionCorrespondence
+				<< NULL // menu separator
+				<< actionShowDescriptor;
 		}
 
 		virtual void pre_draw();
@@ -83,14 +95,15 @@ class mepp_component_Correspondence_plugin :
 		std::set<int> m_paintedFacets;
 		std::vector<Facet_handle> m_facets; // Random access to faces
 		
-		
-		
 	public slots:
 
 		void OnCorrespondence();
+		void showDescriptor();
 
   private:
+    int m_currentLabel;
     QAction *actionCorrespondence;
+    QAction *actionShowDescriptor;
     bool m_hasNotBeenPainted;
 };
 

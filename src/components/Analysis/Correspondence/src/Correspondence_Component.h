@@ -56,13 +56,19 @@ class Correspondence_Component :
 		
 		void compareDescriptorToEllipse(PolyhedronPtr p);
 		
+		void compareDescriptorToEllipseRotation(PolyhedronPtr p);
+		
 		void compareDescriptorToGaussian(PolyhedronPtr p);
 		
 		void computeEllipseParameters(PolyhedronPtr p);
 		
+		void computeEllipseParametersRotation(PolyhedronPtr p);
+		
 		void computeGaussianParameters(PolyhedronPtr p);
 		
 		double computeEnergy(const std::vector<double> & ellipse);
+		
+		double computeEnergyRotation(const std::vector<double> & ellipse);
 		
 		std::vector<double> getCentreDescr() const;
 		
@@ -123,6 +129,7 @@ double L2Dist(std::vector<double> & descr1, std::vector<double> & descr2);
 
 double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & grad, void *data);
 
+double objectiveFunRotation(const std::vector<double> & ellipse, std::vector<double> & grad, void *data);
 
 #endif
 

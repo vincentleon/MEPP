@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+	
 
 #include "../../../../mepp/mepp_component.h"
 
@@ -284,10 +286,54 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 	}
 }
 
-void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
+void Correspondence_Component::compareDescriptorToEllipseRotation(PolyhedronPtr p)
 {
-	std::vector<double> centreDescr = m_centreDescriptor;
+	myMatrix EllipseMat(m_nbLabel,m_nbLabel);
+	for(unsigned i=0;i<m_nbLabel;++i)
+	{
+		for(unsigned j=0;j<m_nbLabel;++j)
+		{
+			EllipseMat[i][j] = m_ellipse[i*m_nbLabel+j];
+		}
+	}
 	
+	myVector mu(m_centreDescriptor.size());
+	for(unsigned l=0;l<m_centreDescriptor.size();++l)
+	{
+		mu[l] = m_centreDescriptor[l];
+	}
+	
+	for(Vertex_iterator pVertex = p->vertices_begin();
+		    pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> localDescr = pVertex->getSemantic();
+		double eqEll = 0.0;
+		myVector x(localDescr.size());
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+ 			x[l] = localDescr[l];
+		}
+			
+		myVector distToMean = x -mu;
+		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
+		
+		myVector res = distToMeanT*(EllipseMat*distToMean);
+		eqEll = res[0];
+		
+		if(eqEll<=1)
+		{
+			pVertex->color(0,0,0);
+		}
+		else
+		{
+			pVertex->color(0.5,0.5,0.5);
+		}
+	}
+}
+
+
+void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
+{	
 	myVector mu(m_centreDescriptor.size());
 	for(unsigned l=0;l<m_centreDescriptor.size();++l)
 	{
@@ -317,9 +363,11 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 	double power = pow(2*3.14159,m_nbLabel);
 	double norm = 1.0/(sqrt(power)*det);
 	
+	std:vector<double> dist;
+	
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
-	    {
+	{
 		std::vector<double> localDescr = pVertex->getSemantic();
 		myVector x(localDescr.size());
 		for(unsigned l=0;l<localDescr.size();++l)
@@ -329,22 +377,29 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 			
 		myVector distToMean = x -mu;
 		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
-		myVector arg = -0.5*(Linear_algebraCd<double>::transpose(distToMean) * ((Linear_algebraCd<double>::inverse(m_gaussianMatrix,det) * (distToMean))));
-			
-		double gauss = norm * exp(arg[0]);
+		myVector mahalanobis = (distToMeanT * inverse) * (distToMean);
 		
-		std::cout << "gauss : " << gauss << std::endl;
+		std::cout << sqrt(mahalanobis[0]) << std::endl;
 		
-		if(std::abs(gauss)<0.001)
+		/*if(sqrt(mahalanobis[0])<10)
 		{
 			pVertex->color(0.5,0.5,0.5);
 		}
 		else
 		{
 			pVertex->color(0,0,0);
-		}
-		
-	    }
+// 		}*/
+		dist.push_back(log(mahalanobis[0]));
+	}
+	double distMax = *std::max_element(dist.begin(),dist.end());
+	int v = 0;
+	for(Vertex_iterator pVertex = p->vertices_begin();
+	    pVertex!=p->vertices_end();++pVertex)
+	{
+		float m = dist[v]/distMax;
+		pVertex->color(m,m,m);
+		v++;
+	}
 }
 
 
@@ -492,19 +547,44 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	m_ellipse = ell;
 }
 
+void Correspondence_Component::computeEllipseParametersRotation(PolyhedronPtr p)
+{
+	m_ellipse = std::vector<double>(m_nbLabel*m_nbLabel,0.0);
+	
+	for(int i=0;i<m_nbLabel;++i)
+	{
+		m_ellipse[i*m_nbLabel+i] = 1/(m_isolineValue*m_isolineValue);
+	}
+		
+	std::vector<double> ell = m_ellipse;
+	
+	int dim = m_ellipse.size();
+	
+	nlopt::opt opt(nlopt::LN_COBYLA,dim);
+	
+	void * data = &(*this);
+	
+	opt.set_min_objective(objectiveFun,data);
+	
+	std::vector<double> lBounds(dim,0.0);
+	opt.set_lower_bounds(lBounds);
+	opt.set_xtol_rel(1e-2);
+	double minf;
+	
+	nlopt::result res = opt.optimize(ell,minf);
+	
+	m_ellipse = ell;
+}
+
 void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 {	
 	m_centreSelection = getSelectionCenter();
 	
-	std::vector<double> stdev(m_nbLabel,0.0);
-	
-	//m_gaussianMatrix(m_nbLabel,m_nbLabel);
-	
 	myMatrix sig(m_nbLabel,m_nbLabel);
 	
-	for(unsigned i=0;i<m_selection.size();++i)
+	for(unsigned s=0;s<m_selection.size();++s)
 	{
-		Vertex_handle v = m_selection[i];
+		Vertex_handle v = m_selection[s];
 		std::vector<double> localDescr = v->getSemantic();
 		
 		for(unsigned i=0;i<m_nbLabel;++i)
@@ -516,22 +596,7 @@ void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 			}
 		}
 	}
-	m_gaussianMatrix = (1.0/m_selection.size()-1) * sig;
-	
-	/*for(unsigned l=0;l<stdev.size();++l)
-	{
-		stdev[l]=sqrt(stdev[l]/m_selection.size());
-		std::cout << stdev[l] << " " << m_centreDescriptor[l] << std::endl;
-	}*/
-	
-	/*myMatrix sig(m_nbLabel,m_nbLabel);
-	for(unsigned i=0;i<m_nbLabel;++i)
-	{
-		for(unsigned j=0;j<m_nbLabel;++j)
-		{
-			
-		}
-	}*/
+	m_gaussianMatrix = (1.0/(m_selection.size()-1)) * sig;
 }
 
 
@@ -563,6 +628,59 @@ double Correspondence_Component::computeEnergy(const std::vector<double> & ellip
 	}
 	return energy;
 }
+
+double Correspondence_Component::computeEnergyRotation(const vector< double >& ellipse)
+{
+	double energy = 0.0;
+	
+	myMatrix EllipseMat(m_nbLabel,m_nbLabel);
+	for(unsigned i=0;i<m_nbLabel;++i)
+	{
+		for(unsigned j=0;j<m_nbLabel;++j)
+		{
+			EllipseMat[i][j] = ellipse[i*m_nbLabel+j];
+		}
+	}
+	
+	std::vector<double> cDescr = m_centreSelection->getSemantic();
+	
+	myVector mu(m_centreDescriptor.size());
+	for(unsigned l=0;l<m_centreDescriptor.size();++l)
+	{
+		mu[l] = m_centreDescriptor[l];
+	}
+	
+	for(unsigned i=0;i<m_selection.size();++i)
+	{
+		Vertex_handle v = m_selection[i];
+		std::vector<double> localDescr = v->getSemantic();
+		double eqEll = 0.0;
+		
+		myVector x(localDescr.size());
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+ 			x[l] = localDescr[l];
+		}
+			
+		myVector distToMean = x -mu;
+		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
+		
+		myVector res = distToMeanT*(EllipseMat*distToMean);
+		eqEll = res[0];
+		
+		bool inEllipse = (eqEll<=1);
+
+		bool inSelection = (m_tag[v] <=2);
+
+		if(inEllipse != inSelection)
+		{
+			double sqrtM = std::sqrt(eqEll) - 1;
+			energy+=sqrtM*sqrtM;
+		}
+	}
+	return energy;
+}
+
 
 std::vector< double > Correspondence_Component::getCentreDescr() const
 {
@@ -604,6 +722,13 @@ double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & g
 {
 	Correspondence_Component * correspondenceComp = (Correspondence_Component *) data;
 	double energy = correspondenceComp->computeEnergy(ellipse);
+	return energy;
+}
+
+double objectiveFunRotation(const std::vector<double> & ellipse, std::vector<double> & grad, void *data)
+{
+	Correspondence_Component * correspondenceComp = (Correspondence_Component *) data;
+	double energy = correspondenceComp->computeEnergyRotation(ellipse);
 	return energy;
 }
 
