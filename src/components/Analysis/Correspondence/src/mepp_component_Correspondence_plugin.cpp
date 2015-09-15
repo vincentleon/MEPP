@@ -176,8 +176,7 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 					
 					component_ptr->compareDescriptorToEllipseRotation(polyhedron_ptr);*/
 					
-					component_ptr->computeGaussianParameters(polyhedron_ptr);
-					
+					component_ptr->computeGaussianParameters(polyhedron_ptr);					
 					component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
 
 					//component_ptr->initializeEllipsoid(polyhedron_ptr);
@@ -285,9 +284,8 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 				
 				component_ptr->initParameters(8,m);	
 				component_ptr->readDescriptor(polyhedron_ptr);
-				//component_ptr->setMatrix(sourceCorrespondence->getMatrix());
+				component_ptr->setMatrix(sourceCorrespondence->getMatrix());
 				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
-				component_ptr->computeGaussianParameters(polyhedron_ptr);	
 				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
 			}
 		}

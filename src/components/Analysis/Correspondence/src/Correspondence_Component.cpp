@@ -692,6 +692,12 @@ std::vector< double > Correspondence_Component::getEllipse() const
 	return m_ellipse;
 }
 
+myMatrix Correspondence_Component::getMatrix() const
+{
+	return m_gaussianMatrix;
+}
+
+
 void Correspondence_Component::setCentreDescriptor(const std::vector<double> & centreDescr)
 {
 	m_centreDescriptor = centreDescr;
@@ -702,6 +708,12 @@ void Correspondence_Component::setEllipse(const vector<double> & ellipse)
 {
 	m_ellipse = ellipse;
 }
+
+void Correspondence_Component::setMatrix(const myMatrix& m)
+{
+	m_gaussianMatrix = m;
+}
+
 
 
 //// NON-MEMBER FUNCTIONS

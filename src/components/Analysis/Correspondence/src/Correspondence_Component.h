@@ -78,6 +78,10 @@ class Correspondence_Component :
 		
 		void setEllipse(const std::vector<double> & ellipse);
 		
+		myMatrix getMatrix() const;
+		
+		void setMatrix(const myMatrix & m);
+		
 	private : 
 		
 		int m_nbLabel;
