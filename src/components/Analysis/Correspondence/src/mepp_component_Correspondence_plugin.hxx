@@ -42,6 +42,8 @@ class mepp_component_Correspondence_plugin :
 		{
 			delete actionCorrespondence;
 			delete actionShowDescriptor;
+			delete actionPainting;
+			delete actionMahalanobis;
 		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
@@ -64,13 +66,28 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionShowDescriptor, SIGNAL(triggered()),this, SLOT(showDescriptor()));
 			}
+			
+			actionPainting = new QAction(tr("Painting"),this);
+			if( actionPainting )
+			{
+				connect(actionPainting, SIGNAL(triggered()),this, SLOT(OnPainting()));
+			}
+			
+			actionMahalanobis = new QAction(tr("Mahalanobis"),this);
+			if( actionMahalanobis )
+			{
+				connect(actionMahalanobis, SIGNAL(triggered()),this, SLOT(OnMahalanobis()));
+			}
 		}
 
 		QList<QAction*> actions() const
 		{
-			return QList<QAction*>() << actionCorrespondence
+			return QList<QAction*>() << actionPainting
 				<< NULL // menu separator
-				<< actionShowDescriptor;
+				<< actionCorrespondence
+				<< actionShowDescriptor
+				<< NULL // menu separator
+				<< actionMahalanobis;
 		}
 
 		virtual void pre_draw();
@@ -99,12 +116,17 @@ class mepp_component_Correspondence_plugin :
 
 		void OnCorrespondence();
 		void showDescriptor();
+		void OnPainting();
+		void OnMahalanobis();
 
   private:
     int m_currentLabel;
     QAction *actionCorrespondence;
     QAction *actionShowDescriptor;
+    QAction *actionPainting;
+    QAction *actionMahalanobis;
     bool m_hasNotBeenPainted;
+    bool m_PaintingMode;
 };
 
 #endif

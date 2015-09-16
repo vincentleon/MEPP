@@ -115,12 +115,12 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 			} while(iss);
 
 
-			//Point3d pt = pVertex->point();
+			Point3d pt = pVertex->point();
 
 			//localDescr.push_back(std::sqrt(CGAL::squared_distance(p,bb)));
-			//localDescr.push_back( std::abs(pt.x() - p->xmin()) );
-			//localDescr.push_back( std::abs(pt.y() - p->ymin()) );
-			//localDescr.push_back( std::abs(pt.z() - p->zmin()) );
+			/*localDescr.push_back( std::abs(pt.x() - p->xmin()) );
+			localDescr.push_back( std::abs(pt.y() - p->ymin()) );
+			localDescr.push_back( std::abs(pt.z() - p->zmin()) );*/
 			
 			pVertex->setSemantic(localDescr);
 			++pVertex;
@@ -130,6 +130,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 	{
 		std::cout << "Impossible d'ouvrir le fichier "<<ss.str()<<" !\n";
 	}
+	initMaxVector(p);
 }
 
 void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
@@ -264,11 +265,13 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 {
 	std::vector<double> centreDescr = m_centreDescriptor;
+	normalize(centreDescr);
 
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 	{
 		std::vector<double> localDescr = pVertex->getSemantic();
+		normalize(localDescr);
 		double eqEll = 0.0;
 		for(unsigned l=0;l<localDescr.size();++l)
 		{
@@ -389,15 +392,16 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 		{
 			pVertex->color(0,0,0);
 // 		}*/
-		dist.push_back(log(mahalanobis[0]));
+		dist.push_back(log(sqrt(mahalanobis[0])));
 	}
-	double distMax = *std::max_element(dist.begin(),dist.end());
+	//double distMax = *std::max_element(dist.begin(),dist.end());
+	double distMax = 1.0;
 	int v = 0;
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	{
 		float m = dist[v]/distMax;
-		pVertex->color(m,m,m);
+		pVertex->color(m,0,0);
 		v++;
 	}
 }
@@ -424,7 +428,7 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 			m_centreDescriptor = m_centreSelection->getSemantic();
 		}
 	}
-	//m_centreSelection->(0,0,1);
+	//m_centreSelection->color(0,0,1);
 	return m_centreSelection;
 }
 
@@ -446,6 +450,7 @@ Vertex_handle Correspondence_Component::getFurtherFromSelectionCenter()
 			furtherFromCenter = m_selection[i];
 		}
 	}
+	//furtherFromCenter->color(0,0,1);
 	return furtherFromCenter;
 }
 
@@ -521,6 +526,8 @@ void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
 	Vertex_handle extremumSelection = getFurtherFromSelectionCenter();
 	//extremumSelection->color(1,0,0);
 	m_isolineValue = L2Dist(m_centreSelection->getSemantic(),extremumSelection->getSemantic());
+	
+	m_ellipse = std::vector<double>(m_nbLabel,m_isolineValue);
 }
 
 void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
@@ -539,7 +546,7 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	
 	std::vector<double> lBounds(dim,0.0);
 	opt.set_lower_bounds(lBounds);
-	opt.set_xtol_rel(1e-2);
+	opt.set_xtol_rel(1e-4);
 	double minf;
 	
 	nlopt::result res = opt.optimize(ell,minf);
@@ -604,12 +611,14 @@ double Correspondence_Component::computeEnergy(const std::vector<double> & ellip
 {
 	double energy = 0.0;
 	
-	std::vector<double> cDescr = m_centreSelection->getSemantic();
+	std::vector<double> cDescr = m_centreDescriptor;
+	normalize(cDescr);
 	
 	for(unsigned i=0;i<m_selection.size();++i)
 	{
 		Vertex_handle v = m_selection[i];
 		std::vector<double> localDescr = v->getSemantic();
+		normalize(localDescr);
 		double eqEll = 0.0;
 		for(unsigned l=0;l<localDescr.size();++l)
 		{

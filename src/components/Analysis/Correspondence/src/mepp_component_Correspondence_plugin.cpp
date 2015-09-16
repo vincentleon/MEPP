@@ -52,11 +52,11 @@ void mepp_component_Correspondence_plugin::OnMouseLeftUp(QMouseEvent *event)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-		if(doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr))
-		{
+		//if(doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr))
+		//{
 			m_hasNotBeenPainted=false;
-			std::cout << "HAS BEEN PAINTED " << std::endl;
-		}
+			//std::cout << "HAS BEEN PAINTED " << std::endl;
+		//}
  	}
 }
 
@@ -67,12 +67,12 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		
- 		if (doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr))
-		{
+ 		//if (doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr))
+		//{
 			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 			
-			if(component_ptr->get_init() != 2)
-			{
+			//if(component_ptr->get_init() != 2)
+			//{
 				int x,y,h,w;
 				x = event->x();
 				y = event->y();
@@ -95,8 +95,8 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 				m_fbo->release();
 				//std::cout <<"index : "<< index << "\n";
 				//m_paintedFacets.insert(index);
-			}
-		}
+			//}
+		//}
 		viewer->recreateListsAndUpdateGL();
 	}
 }
@@ -120,6 +120,21 @@ void mepp_component_Correspondence_plugin::showDescriptor()
 	}
 }
 
+void mepp_component_Correspondence_plugin::OnPainting()
+{
+	if(mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		for(Facet_iterator pFacet = polyhedron_ptr->facets_begin();pFacet!=polyhedron_ptr->facets_end();++pFacet)
+		{
+			m_facets.push_back(pFacet);
+		}
+		PaintStart(viewer);
+	}
+	m_hasNotBeenPainted = true;
+}
+
 
 void mepp_component_Correspondence_plugin::OnCorrespondence()
 {
@@ -137,62 +152,28 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 			SettingsDialog dial;
 			if (dial.exec() == QDialog::Accepted)
 			{
-				if(m_hasNotBeenPainted)
-				{
-					std::cout << "HAS NOT BEEN PAINTED " << std::endl;
-					//PolyhedronPtr polyhedron_ptr = view->getScenePtr()->get_polyhedron();
-		
-					for(Facet_iterator pFacet = polyhedron_ptr->facets_begin();pFacet!=polyhedron_ptr->facets_end();++pFacet)
-					{
-						m_facets.push_back(pFacet);
-					}
-					PaintStart(viewer);
-				}
-				else{
-					std::cout << "Correspondence ...  " << std::endl;
-					QApplication::setOverrideCursor(Qt::WaitCursor);
+				QApplication::setOverrideCursor(Qt::WaitCursor);
 
-					mw->statusBar()->showMessage(tr("Correspondence..."));
-					
-					component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
-					
-					component_ptr->initParameters(nbLabel,meshID);
-					
-					component_ptr->readDescriptor(polyhedron_ptr);
-					
-					/*int i=0;
-					while(i<nbLabel)
-					{
-						component_ptr->showDescriptor(polyhedron_ptr,i);
-						viewer->recreateListsAndUpdateGL();
-						unsigned uu;
-						std::cin >> uu;
-						i++;
-					}*/
-					
-					/*component_ptr->initializeEllipsoid(polyhedron_ptr);
-					
-					component_ptr->computeEllipseParametersRotation(polyhedron_ptr);
-					
-					component_ptr->compareDescriptorToEllipseRotation(polyhedron_ptr);*/
-					
-					component_ptr->computeGaussianParameters(polyhedron_ptr);					
-					component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
+				mw->statusBar()->showMessage(tr("Correspondence..."));
+				
+				component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
+				
+				component_ptr->initParameters(nbLabel,meshID);
+				
+				component_ptr->readDescriptor(polyhedron_ptr);
+				
+				component_ptr->initializeEllipsoid(polyhedron_ptr);
+				
+				component_ptr->computeEllipseParameters(polyhedron_ptr);
+				
+				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+				
+				mw->statusBar()->showMessage(tr("Correspondence is done"));
 
-					//component_ptr->initializeEllipsoid(polyhedron_ptr);
-					//viewer->recreateListsAndUpdateGL();
-					
-					/*component_ptr->computeEllipseParameters(polyhedron_ptr);
-					
-					component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
-					
-					mw->statusBar()->showMessage(tr("Correspondence is done"));
-*/
-					component_ptr->set_init(2);
-					viewer->recreateListsAndUpdateGL();
-					
-					compareToDataset(component_ptr,meshID);
-				}
+				component_ptr->set_init(2);
+				viewer->recreateListsAndUpdateGL();
+				
+				compareToDataset(component_ptr,meshID);
 			}
 		}
 	}
@@ -200,16 +181,52 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 		
 }
 
+void mepp_component_Correspondence_plugin::OnMahalanobis()
+{
+	if (mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		
+		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
+		{
+			int nbLabel = 8;
+			int meshID = 10;
+
+			SettingsDialog dial;
+			if (dial.exec() == QDialog::Accepted)
+			{
+				
+				QApplication::setOverrideCursor(Qt::WaitCursor);
+
+				mw->statusBar()->showMessage(tr("Mahalanobis..."));
+				
+				component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
+				
+				component_ptr->initParameters(nbLabel,meshID);
+				
+				component_ptr->readDescriptor(polyhedron_ptr);
+
+				component_ptr->computeGaussianParameters(polyhedron_ptr);
+				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
+
+				mw->statusBar()->showMessage(tr("Mahalanobis is done"));
+
+				component_ptr->set_init(2);
+				viewer->recreateListsAndUpdateGL();
+			}
+		}
+	}
+	QApplication::restoreOverrideCursor();
+}
+
+
+
 void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 {
 	std::cout<< "inside PaintStart"; 
 	
 		PolyhedronPtr polyhedron_ptr = view->getScenePtr()->get_polyhedron();
-		
-		/*for(Facet_iterator pFacet = polyhedron_ptr->facets_begin();pFacet!=polyhedron_ptr->facets_end();++pFacet)
-		{
-			m_facets.push_back(pFacet);
-		}*/
 		
 		view->makeCurrent();
 		
@@ -275,18 +292,18 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 				
 				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
 				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
-				/*component_ptr->initParameters(8,m);
+				component_ptr->initParameters(8,m);
 				component_ptr->readDescriptor(polyhedron_ptr);
 				component_ptr->setEllipse(sourceCorrespondence->getEllipse());
 				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
 				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
-				viewerI->recreateListsAndUpdateGL();*/
+				viewerI->recreateListsAndUpdateGL();
 				
-				component_ptr->initParameters(8,m);	
+				/*component_ptr->initParameters(8,m);	
 				component_ptr->readDescriptor(polyhedron_ptr);
 				component_ptr->setMatrix(sourceCorrespondence->getMatrix());
 				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
-				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
+				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);*/
 			}
 		}
 	}
