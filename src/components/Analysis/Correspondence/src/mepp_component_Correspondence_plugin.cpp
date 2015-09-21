@@ -110,7 +110,13 @@ void mepp_component_Correspondence_plugin::showDescriptor()
 		
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		int nbLabel = 8;
-		int meshID = 10;
+		
+		std::string meshIDString = polyhedron_ptr->pName;
+		unsigned posB = meshIDString.find_last_of("/");
+		unsigned posE = meshIDString.find_last_of(".off");
+			
+		int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+		
 		component_ptr->initParameters(nbLabel,meshID);
 					
 		component_ptr->readDescriptor(polyhedron_ptr);
@@ -147,7 +153,11 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		{
 			int nbLabel = 8;
-			int meshID = 10;
+			std::string meshIDString = polyhedron_ptr->pName;
+			unsigned posB = meshIDString.find_last_of("/");
+			unsigned posE = meshIDString.find_last_of(".off");
+			
+			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 
 			SettingsDialog dial;
 			if (dial.exec() == QDialog::Accepted)
@@ -191,8 +201,12 @@ void mepp_component_Correspondence_plugin::OnMahalanobis()
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		{
 			int nbLabel = 8;
-			int meshID = 10;
-
+			std::string meshIDString = polyhedron_ptr->pName;
+			unsigned posB = meshIDString.find_last_of("/");
+			unsigned posE = meshIDString.find_last_of(".off");
+			
+			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+			
 			SettingsDialog dial;
 			if (dial.exec() == QDialog::Accepted)
 			{
@@ -214,6 +228,8 @@ void mepp_component_Correspondence_plugin::OnMahalanobis()
 
 				component_ptr->set_init(2);
 				viewer->recreateListsAndUpdateGL();
+				
+				//compareToDatasetMahalanobis(component_ptr,meshID);
 			}
 		}
 	}
@@ -239,7 +255,7 @@ void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 		m_fbo->bind();
 		glDisable(GL_LIGHTING);
 		glShadeModel(GL_FLAT);
-		glClearColor(0.0,0.0,0.0,1.0);
+		glClearColor(1.0,1.0,10.0,1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glBegin(GL_TRIANGLES);
 		int i = 0;
@@ -274,8 +290,6 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 {
 	Viewer* viewerI = NULL;
 	
-	PolyhedronPtr polyhedron_ptr_out;
-	
 	for(int m = 1; m <=20; ++m)
 	{
 		if(m == sourceID) {continue;}
@@ -308,6 +322,40 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 		}
 	}
 }
+
+void mepp_component_Correspondence_plugin::compareToDatasetMahalanobis(Correspondence_ComponentPtr sourceCorrespondence, int sourceID)
+{
+	Viewer* viewerI = NULL;
+	
+	for(int m = 1; m <= 20; ++m)
+	{
+		if(m == sourceID) {continue;}
+		emit(mw->get_actionNewEmpty()->trigger());
+		
+		for(int i=0; i<lwindow.size();i++)
+		{
+			viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+			if(viewerI->getScenePtr()->get_polyhedron()->empty())
+			{
+				std::stringstream ss;
+				ss << "/home/leon/datasetHuman/" << m << ".off";
+				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
+				
+				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
+				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+				
+				component_ptr->initParameters(8,m);	
+				component_ptr->readDescriptor(polyhedron_ptr);
+				component_ptr->setMatrix(sourceCorrespondence->getMatrix());
+				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
+				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);
+				viewerI->recreateListsAndUpdateGL();
+			}
+		}
+	}
+	
+}
+
 
 
 

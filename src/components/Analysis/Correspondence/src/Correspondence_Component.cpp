@@ -258,7 +258,7 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 			i++;
 		}
 	std::vector<double> & localDescr = cVertex->getSemantic();
-	std::cout << "closest has been found" << distMin << std::endl;
+	//std::cout << "closest has been found" << distMin << std::endl;
 	return localDescr;
 }
 
@@ -337,31 +337,15 @@ void Correspondence_Component::compareDescriptorToEllipseRotation(PolyhedronPtr 
 
 void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 {	
-	myVector mu(m_centreDescriptor.size());
-	for(unsigned l=0;l<m_centreDescriptor.size();++l)
-	{
-		mu[l] = m_centreDescriptor[l];
-	}
+	myVector & mu = m_mu;	
 	
 	myMatrix I,D;
 	myVector C;
 	std::vector<int> vv;
 	double dd;
-		
-	std::cout << std::endl;
-	std::cout << "Matrix : " << std::endl;
-	for(unsigned i = 0;i<m_nbLabel;++i)
-	{
-		for(unsigned j = 0;j<m_nbLabel;++j)
-		{
-			std::cout << m_gaussianMatrix[i][j] << " ";
-		}
-		std::cout << std::endl;
-	}
-	double det = Linear_algebraCd<double>::determinant(m_gaussianMatrix,I,D,vv,C);
- 	std::cout << "determinant : " << det << std::endl;
-	
-	myMatrix inverse = Linear_algebraCd<double>::inverse(m_gaussianMatrix,dd);
+
+	double & det = m_gaussianDeterminant;
+	myMatrix & inverse = m_inverseGaussianMatrix;
 	
 	double power = pow(2*3.14159,m_nbLabel);
 	double norm = 1.0/(sqrt(power)*det);
@@ -382,26 +366,25 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
 		myVector mahalanobis = (distToMeanT * inverse) * (distToMean);
 		
-		std::cout << sqrt(mahalanobis[0]) << std::endl;
-		
-		/*if(sqrt(mahalanobis[0])<10)
-		{
-			pVertex->color(0.5,0.5,0.5);
-		}
-		else
-		{
-			pVertex->color(0,0,0);
-// 		}*/
+		//std::cout << sqrt(mahalanobis[0]) << std::endl;
 		dist.push_back(log(sqrt(mahalanobis[0])));
 	}
-	//double distMax = *std::max_element(dist.begin(),dist.end());
-	double distMax = 1.0;
+	double distMax = *std::max_element(dist.begin(),dist.end());
+	//double distMax = 1.0;
 	int v = 0;
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	{
-		float m = dist[v]/distMax;
-		pVertex->color(m,0,0);
+ 		float m = dist[v];
+		pVertex->color(m/distMax,m/distMax,m/distMax);
+		/*if( m < m_threshold )
+		{
+			pVertex->color(m/distMax,0,0);
+		}/*
+		else
+		{
+			pVertex->color(0.0,0.0,0.0);
+		}*/
 		v++;
 	}
 }
@@ -603,7 +586,40 @@ void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 			}
 		}
 	}
+	myMatrix I,D;	
+	myVector C;
+	std::vector<int> vv;
+	double dd;
+	
 	m_gaussianMatrix = (1.0/(m_selection.size()-1)) * sig;
+	m_inverseGaussianMatrix = Linear_algebraCd<double>::inverse(m_gaussianMatrix,dd);
+	m_gaussianDeterminant = Linear_algebraCd<double>::determinant(m_gaussianMatrix,I,D,vv,C);
+
+	m_mu = myVector(m_centreDescriptor.size());
+	
+	for(unsigned l=0;l<m_centreDescriptor.size();++l)
+	{
+		m_mu[l] = m_centreDescriptor[l];
+	}
+	
+	std::vector<double> threshold(1,100);
+	
+	nlopt::opt opt(nlopt::LN_COBYLA,1);
+	
+	void * data = &(*this);
+	
+	opt.set_min_objective(objectiveFunGaussian,data);
+	
+	std::vector<double> lBounds(1,0.0);
+	opt.set_lower_bounds(lBounds);
+	opt.set_xtol_rel(1e-2);
+	double minf;
+	
+	double initE = computeEnergyGaussian(threshold);
+	
+	nlopt::result res = opt.optimize(threshold,minf);
+	
+	m_threshold = threshold[0];
 }
 
 
@@ -618,7 +634,7 @@ double Correspondence_Component::computeEnergy(const std::vector<double> & ellip
 	{
 		Vertex_handle v = m_selection[i];
 		std::vector<double> localDescr = v->getSemantic();
-		normalize(localDescr);
+ 		normalize(localDescr);
 		double eqEll = 0.0;
 		for(unsigned l=0;l<localDescr.size();++l)
 		{
@@ -690,6 +706,58 @@ double Correspondence_Component::computeEnergyRotation(const vector< double >& e
 	return energy;
 }
 
+double Correspondence_Component::computeEnergyGaussian(const vector< double >& threshold)
+{
+	double energy = 0.0;
+	
+	myVector & mu = m_mu;
+
+	double power = pow(2*3.14159,m_nbLabel);
+	double norm = 1.0/(sqrt(power)*m_gaussianDeterminant);
+	
+	std:vector<double> dist;
+	
+	for(unsigned i=0;i<m_selection.size();++i)
+	{
+		Vertex_handle v = m_selection[i];
+		std::vector<double> localDescr = v->getSemantic();
+		myVector x(localDescr.size());
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+ 			x[l] = localDescr[l];
+		}
+			
+		myVector distToMean = x - mu;
+		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
+		myVector mahalanobis = (distToMeanT * m_inverseGaussianMatrix) * (distToMean);
+		
+		//std::cout << sqrt(mahalanobis[0]) << std::endl;
+		dist.push_back(sqrt(mahalanobis[0]));
+	}
+	//double distMax = *std::max_element(dist.begin(),dist.end());
+	double distMax = 1.0;
+	
+	int f = 0;
+	for(unsigned i=0;i<m_selection.size();++i)
+	{
+		Vertex_handle v = m_selection[i];
+		float m = dist[f]/distMax;
+		
+		bool inGaussian = (m<=threshold[0]);
+
+		bool inSelection = (m_tag[v] <=2);
+
+		if(inGaussian != inSelection)
+		{
+			double incr= m;
+			energy+=incr*incr;
+		}
+		f++;
+	}
+	return energy;
+}
+
+
 
 std::vector< double > Correspondence_Component::getCentreDescr() const
 {
@@ -750,6 +818,13 @@ double objectiveFunRotation(const std::vector<double> & ellipse, std::vector<dou
 {
 	Correspondence_Component * correspondenceComp = (Correspondence_Component *) data;
 	double energy = correspondenceComp->computeEnergyRotation(ellipse);
+	return energy;
+}
+
+double objectiveFunGaussian(const std::vector<double> & threshold, std::vector<double> & grad, void *data)
+{
+	Correspondence_Component * correspondenceComp = (Correspondence_Component *) data;
+	double energy = correspondenceComp->computeEnergyGaussian(threshold);
 	return energy;
 }
 

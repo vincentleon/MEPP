@@ -105,6 +105,7 @@ class mepp_component_Correspondence_plugin :
 		virtual void OnKeyRelease(QKeyEvent *event) {}
 		
 		void compareToDataset(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
+		void compareToDatasetMahalanobis(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
 		
 		void PaintStart(Viewer * view);
 		

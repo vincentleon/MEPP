@@ -70,6 +70,8 @@ class Correspondence_Component :
 		
 		double computeEnergyRotation(const std::vector<double> & ellipse);
 		
+		double computeEnergyGaussian(const std::vector<double> & threshold);
+		
 		std::vector<double> getCentreDescr() const;
 		
 		void setCentreDescriptor(const std::vector<double> & centreDescr);
@@ -97,6 +99,11 @@ class Correspondence_Component :
 		std::vector<double> m_ellipse;
 		
 		myMatrix m_gaussianMatrix;
+		myMatrix m_inverseGaussianMatrix;
+		double m_gaussianDeterminant;
+		double m_threshold;
+		myVector m_mu;
+		
 		
 		bool m_colorCompare2Source;
 		bool m_learningMode;
@@ -134,6 +141,9 @@ double L2Dist(std::vector<double> & descr1, std::vector<double> & descr2);
 double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & grad, void *data);
 
 double objectiveFunRotation(const std::vector<double> & ellipse, std::vector<double> & grad, void *data);
+
+double objectiveFunGaussian(const std::vector<double> & threshold, std::vector<double> & grad, void *data);
+
 
 #endif
 
