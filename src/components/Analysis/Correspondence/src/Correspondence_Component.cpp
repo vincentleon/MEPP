@@ -17,6 +17,9 @@
 #include "Correspondence_Polyhedron.h"
 #include "geodesic/geodesic_algorithm_exact.h"
 
+#define Malloc(type,n) (type *)malloc((n)*sizeof(type))
+
+
 Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p)
 {
 	componentName = "Correspondence_Component";
@@ -131,6 +134,13 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 		std::cout << "Impossible d'ouvrir le fichier "<<ss.str()<<" !\n";
 	}
 	initMaxVector(p);
+	for(Vertex_iterator pVertex = p->vertices_begin();
+		    pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> descr = pVertex->getSemantic();
+		this->normalize(descr);
+		pVertex->setSemantic(descr);
+	}
 }
 
 void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
@@ -265,13 +275,13 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 {
 	std::vector<double> centreDescr = m_centreDescriptor;
-	normalize(centreDescr);
+	//normalize(centreDescr);
 
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 	{
 		std::vector<double> localDescr = pVertex->getSemantic();
-		normalize(localDescr);
+		//normalize(localDescr);
 		double eqEll = 0.0;
 		for(unsigned l=0;l<localDescr.size();++l)
 		{
@@ -350,8 +360,8 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 	double power = pow(2*3.14159,m_nbLabel);
 	double norm = 1.0/(sqrt(power)*det);
 	
-	std:vector<double> dist;
-	
+	std::vector<double> dist;
+		
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	{
@@ -361,33 +371,64 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 		{
  			x[l] = localDescr[l];
 		}
-			
+		/*std::cout << x.dimension();
+		std::cout << mu.dimension();
+		
+		std::cout << std::endl;*/
 		myVector distToMean = x -mu;
 		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
-		myVector mahalanobis = (distToMeanT * inverse) * (distToMean);
+		/*std::cout << distToMeanT.row_dimension() << " " << distToMeanT.column_dimension()<< std::endl;;
+		std::cout << inverse.row_dimension() << " " << inverse.column_dimension()<< std::endl;;
+		std::cout << std::endl<< std::endl;;*/
+		myVector mahalanobis = (distToMeanT * inverse * distToMean);
 		
-		//std::cout << sqrt(mahalanobis[0]) << std::endl;
-		dist.push_back(log(sqrt(mahalanobis[0])));
+		dist.push_back(sqrt(mahalanobis[0]));
+		//	std::cout << sqrt(mahalanobis[0]) << " " <<std::flush;
 	}
-	double distMax = *std::max_element(dist.begin(),dist.end());
-	//double distMax = 1.0;
 	int v = 0;
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	{
  		float m = dist[v];
-		pVertex->color(m/distMax,m/distMax,m/distMax);
-		/*if( m < m_threshold )
+		std::cout <<std::endl << m << " ";
+		if( m < m_threshold )
 		{
-			pVertex->color(m/distMax,0,0);
-		}/*
+			//pVertex->color(m/m_threshold,m/m_threshold,m/m_threshold);
+			pVertex->color(0,0,0);
+		}
 		else
 		{
-			pVertex->color(0.0,0.0,0.0);
-		}*/
+			pVertex->color(1.0,1.0,1.0);
+		}
 		v++;
 	}
 }
+
+void Correspondence_Component::compareDescriptorToSVM(PolyhedronPtr p)
+{
+	for(Vertex_iterator pVertex=p->vertices_begin();
+	    pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> & descr = pVertex->getSemantic();
+		struct svm_node * x = Malloc(struct svm_node,m_nbLabel+1);
+		for(unsigned l=0;l<m_nbLabel;++l)
+		{
+			x[l].index = l;
+			x[l].value = descr[l];
+		}
+		x[m_nbLabel].index = -1;
+		double predictedLabel = svm_predict(m_svmModel,x);
+		if(predictedLabel == 1)
+		{
+			pVertex->color(0,0,0);
+		}
+		else
+		{
+			pVertex->color(1,1,1);
+		}
+	}
+}
+
 
 
 Vertex_handle Correspondence_Component::getSelectionCenter()
@@ -570,13 +611,15 @@ void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 {	
 	m_centreSelection = getSelectionCenter();
 	
+	Vertex_handle extremumSelection = getFurtherFromSelectionCenter();
+	std::vector<double> extrDescr = extremumSelection->getSemantic();
+	
 	myMatrix sig(m_nbLabel,m_nbLabel);
 	
 	for(unsigned s=0;s<m_selection.size();++s)
 	{
 		Vertex_handle v = m_selection[s];
 		std::vector<double> localDescr = v->getSemantic();
-		
 		for(unsigned i=0;i<m_nbLabel;++i)
 		{
 			double t1 = localDescr[i] - m_centreDescriptor[i];
@@ -586,12 +629,27 @@ void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 			}
 		}
 	}
+	m_gaussianMatrix = (1.0/(m_selection.size()-1)) * sig;
+	
+	/*for(Vertex_iterator pVertex = p->vertices_begin();pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> localDescr = pVertex->getSemantic();
+		for(unsigned i=0;i<m_nbLabel;++i)
+		{
+			double t1 = localDescr[i] - m_centreDescriptor[i];
+			for(unsigned j=0;j<m_nbLabel;++j)
+			{
+				sig[i][j] += t1 * (localDescr[j] - m_centreDescriptor[j]);
+			}
+		}
+	}
+	m_gaussianMatrix = (1.0/(p->size_of_vertices()-1)) * sig;*/
 	myMatrix I,D;	
 	myVector C;
 	std::vector<int> vv;
 	double dd;
 	
-	m_gaussianMatrix = (1.0/(m_selection.size()-1)) * sig;
+	
 	m_inverseGaussianMatrix = Linear_algebraCd<double>::inverse(m_gaussianMatrix,dd);
 	m_gaussianDeterminant = Linear_algebraCd<double>::determinant(m_gaussianMatrix,I,D,vv,C);
 
@@ -602,39 +660,123 @@ void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 		m_mu[l] = m_centreDescriptor[l];
 	}
 	
-	std::vector<double> threshold(1,100);
+	// threshold optimization
 	
+	/*std::vector<double> threshold(1,0.0);
 	nlopt::opt opt(nlopt::LN_COBYLA,1);
-	
 	void * data = &(*this);
-	
 	opt.set_min_objective(objectiveFunGaussian,data);
-	
 	std::vector<double> lBounds(1,0.0);
 	opt.set_lower_bounds(lBounds);
 	opt.set_xtol_rel(1e-2);
 	double minf;
-	
-	double initE = computeEnergyGaussian(threshold);
-	
 	nlopt::result res = opt.optimize(threshold,minf);
+	m_threshold = threshold[0];*/
 	
-	m_threshold = threshold[0];
+	Vertex_handle v = getFurtherFromSelectionCenter();
+	std::vector<double> localDescr = v->getSemantic();
+	myVector x(localDescr.size());
+	for(unsigned l=0;l<localDescr.size();++l)
+	{
+		x[l] = localDescr[l];
+	}
+		
+	myVector distToMean = x - m_mu;
+	for(unsigned s=0;s<localDescr.size();++s)
+	{
+		std::cout<< x[s] << " ";
+	}
+	std::cout << std::endl;
+	
+	for(unsigned s=0;s<localDescr.size();++s)
+	{
+		std::cout<< m_mu[s] << " ";
+	}
+	std::cout << std::endl;
+	for(unsigned s=0;s<localDescr.size();++s)
+	{
+		std::cout<< distToMean[s] << " ";
+	}
+	std::cout << std::endl;
+	
+	
+	myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
+	myVector mahalanobis = ((distToMeanT * m_inverseGaussianMatrix )* distToMean);
+	
+	m_threshold = sqrt(mahalanobis[0]);
+	std::cout << "\nthreshold : " << m_threshold << std::endl;
 }
 
+void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
+{	
+	svm_problem selectionProblem;
+	selectionProblem.l = m_selection.size();
+	std::vector<double> labels;
+	std::vector<svm_node*> inputs;
+	selectionProblem.x = Malloc(struct svm_node *, selectionProblem.l);
+	
+	unsigned j=0;
+	for(unsigned s=0;s<m_selection.size();++s)
+	{
+		std::vector<double> & descr = m_selection[s]->getSemantic();
+		if(m_tag[m_selection[s]] == 1)
+		{
+ 			labels.push_back(1);
+		}
+		else
+		{
+			labels.push_back(0);
+		}
+		
+		selectionProblem.x[s] = Malloc(struct svm_node, m_nbLabel+1);
+		for(unsigned l=0;l<m_nbLabel;++l)
+		{
+			selectionProblem.x[s][l].index = l;
+			selectionProblem.x[s][l].value = descr[l];
+		}
+		selectionProblem.x[s][m_nbLabel].index = -1;
+	}
+	selectionProblem.y= labels.data();
+	
+	struct svm_parameter param;
+	param.svm_type = ONE_CLASS;
+	param.kernel_type = GAUSSIAN;
+	param.degree = 3;
+	param.gamma = 1.0/m_nbLabel;	// 1/num_features
+	param.coef0 = 0;
+	param.nu = 0.5;
+	param.cache_size = 100;
+	param.C = 1;
+	param.eps = 1e-3;
+	param.p = 0.1;
+	param.shrinking = 1;
+	param.probability = 0;
+	param.nr_weight = 0;
+	param.weight_label = NULL;
+	param.weight = NULL;
+	const char * error_msg = svm_check_parameter(&selectionProblem,&param);
+	if(error_msg)
+	{
+		fprintf(stderr,"Error: %s\n",error_msg);
+		exit(1);
+	}
+	m_svmModel = svm_train(&selectionProblem,&param);
+}
+
+// Energy Functions 
 
 double Correspondence_Component::computeEnergy(const std::vector<double> & ellipse)
 {
 	double energy = 0.0;
 	
 	std::vector<double> cDescr = m_centreDescriptor;
-	normalize(cDescr);
+	//normalize(cDescr);
 	
 	for(unsigned i=0;i<m_selection.size();++i)
 	{
 		Vertex_handle v = m_selection[i];
 		std::vector<double> localDescr = v->getSemantic();
- 		normalize(localDescr);
+//  		//normalize(localDescr);
 		double eqEll = 0.0;
 		for(unsigned l=0;l<localDescr.size();++l)
 		{
@@ -731,7 +873,6 @@ double Correspondence_Component::computeEnergyGaussian(const vector< double >& t
 		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
 		myVector mahalanobis = (distToMeanT * m_inverseGaussianMatrix) * (distToMean);
 		
-		//std::cout << sqrt(mahalanobis[0]) << std::endl;
 		dist.push_back(sqrt(mahalanobis[0]));
 	}
 	//double distMax = *std::max_element(dist.begin(),dist.end());
@@ -747,7 +888,7 @@ double Correspondence_Component::computeEnergyGaussian(const vector< double >& t
 
 		bool inSelection = (m_tag[v] <=2);
 
-		if(inGaussian != inSelection)
+		if(!inGaussian && inSelection)
 		{
 			double incr= m;
 			energy+=incr*incr;
@@ -758,6 +899,7 @@ double Correspondence_Component::computeEnergyGaussian(const vector< double >& t
 }
 
 
+// Getters and setters
 
 std::vector< double > Correspondence_Component::getCentreDescr() const
 {
@@ -772,6 +914,32 @@ std::vector< double > Correspondence_Component::getEllipse() const
 myMatrix Correspondence_Component::getMatrix() const
 {
 	return m_gaussianMatrix;
+}
+
+myVector Correspondence_Component::getVector() const
+{
+	return m_mu;
+}
+
+
+myMatrix Correspondence_Component::getInverseMatrix() const
+{
+	return m_inverseGaussianMatrix;
+}
+
+double Correspondence_Component::getDeterminant() const
+{
+	return m_gaussianDeterminant;
+}
+
+double Correspondence_Component::getThreshold() const
+{
+	return m_threshold;
+}
+
+svm_model* Correspondence_Component::getSVM() const
+{
+	return m_svmModel;
 }
 
 
@@ -791,6 +959,31 @@ void Correspondence_Component::setMatrix(const myMatrix& m)
 	m_gaussianMatrix = m;
 }
 
+void Correspondence_Component::setVector(const myVector& v)
+{
+	m_mu = v;
+}
+
+void Correspondence_Component::setSVM(svm_model* svm)
+{
+	m_svmModel = svm;
+}
+
+
+void Correspondence_Component::setInverseMatrix(const myMatrix& m)
+{
+	m_inverseGaussianMatrix = m;
+}
+
+void Correspondence_Component::setDeterminant(double det)
+{
+	m_gaussianDeterminant = det;
+}
+
+void Correspondence_Component::setThreshold(double thresh)
+{
+	m_threshold = thresh;
+}
 
 
 //// NON-MEMBER FUNCTIONS

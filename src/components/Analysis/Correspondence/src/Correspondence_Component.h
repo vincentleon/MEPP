@@ -21,9 +21,10 @@
 
 #include "CGAL/Linear_algebraCd.h"
 
+#include "svm.h"
+
 typedef CGAL::Linear_algebraCd<double>::Matrix myMatrix;
 typedef CGAL::Linear_algebraCd<double>::Vector myVector;
-
 
 /*!
  * \class Correspondence_Component
@@ -60,11 +61,15 @@ class Correspondence_Component :
 		
 		void compareDescriptorToGaussian(PolyhedronPtr p);
 		
+		void compareDescriptorToSVM(PolyhedronPtr p);
+		
 		void computeEllipseParameters(PolyhedronPtr p);
 		
 		void computeEllipseParametersRotation(PolyhedronPtr p);
 		
 		void computeGaussianParameters(PolyhedronPtr p);
+		
+		void learnSVMClassifier(PolyhedronPtr p);
 		
 		double computeEnergy(const std::vector<double> & ellipse);
 		
@@ -81,8 +86,18 @@ class Correspondence_Component :
 		void setEllipse(const std::vector<double> & ellipse);
 		
 		myMatrix getMatrix() const;
+		myVector getVector() const;
+		myMatrix getInverseMatrix() const;
+		double getDeterminant() const;
+		double getThreshold() const;
+		svm_model * getSVM() const;
 		
 		void setMatrix(const myMatrix & m);
+		void setVector(const myVector & v);
+		void setInverseMatrix(const myMatrix & m);
+		void setDeterminant(double det);
+		void setThreshold(double thresh);
+		void setSVM(svm_model * svm);
 		
 	private : 
 		
@@ -104,18 +119,20 @@ class Correspondence_Component :
 		double m_threshold;
 		myVector m_mu;
 		
-		
 		bool m_colorCompare2Source;
 		bool m_learningMode;
 		bool m_saveFeatures;
 		bool m_selectionMode;
 		bool m_readSelection;
 		
+		svm_model * m_svmModel;
+		
 		std::vector<Vertex_handle> m_selection;
 		std::map<Vertex_handle,int> m_tag;
 		Analysis::Shape m_Shape;
 		geodesic::Mesh m_gmesh;
 		geodesic::GeodesicAlgorithmExact * m_geoAlg;
+		
 		
 		void initGeodesicMesh(PolyhedronPtr p);
 		

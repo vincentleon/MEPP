@@ -44,6 +44,7 @@ class mepp_component_Correspondence_plugin :
 			delete actionShowDescriptor;
 			delete actionPainting;
 			delete actionMahalanobis;
+			delete actionSVM;
 		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
@@ -55,7 +56,7 @@ class mepp_component_Correspondence_plugin :
 			m_hasNotBeenPainted = true;
 			m_currentLabel = 0;
 			
-			actionCorrespondence = new QAction(tr("Correspondence"), this);
+			actionCorrespondence = new QAction(tr("Ellipse Correspondence"), this);
 			if(actionCorrespondence)
 			{
 				connect(actionCorrespondence, SIGNAL(triggered()),this, SLOT(OnCorrespondence()));
@@ -78,6 +79,11 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionMahalanobis, SIGNAL(triggered()),this, SLOT(OnMahalanobis()));
 			}
+			actionSVM = new QAction(tr("SVM correspondence"),this);
+			if( actionSVM )
+			{
+				connect(actionSVM, SIGNAL(triggered()),this, SLOT(OnSVM()));
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -87,7 +93,9 @@ class mepp_component_Correspondence_plugin :
 				<< actionCorrespondence
 				<< actionShowDescriptor
 				<< NULL // menu separator
-				<< actionMahalanobis;
+				<< actionMahalanobis
+				<< NULL // menu separator
+				<< actionSVM;
 		}
 
 		virtual void pre_draw();
@@ -106,6 +114,7 @@ class mepp_component_Correspondence_plugin :
 		
 		void compareToDataset(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
 		void compareToDatasetMahalanobis(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
+		void compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
 		
 		void PaintStart(Viewer * view);
 		
@@ -119,6 +128,7 @@ class mepp_component_Correspondence_plugin :
 		void showDescriptor();
 		void OnPainting();
 		void OnMahalanobis();
+		void OnSVM();
 
   private:
     int m_currentLabel;
@@ -126,6 +136,7 @@ class mepp_component_Correspondence_plugin :
     QAction *actionShowDescriptor;
     QAction *actionPainting;
     QAction *actionMahalanobis;
+    QAction *actionSVM;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };
