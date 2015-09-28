@@ -45,6 +45,7 @@ class mepp_component_Correspondence_plugin :
 			delete actionPainting;
 			delete actionMahalanobis;
 			delete actionSVM;
+			delete actionCompare;
 		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
@@ -84,6 +85,11 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionSVM, SIGNAL(triggered()),this, SLOT(OnSVM()));
 			}
+			actionCompare = new QAction(tr("Ellipse / SVM Comparison"),this);
+			if( actionCompare )
+			{
+				connect(actionCompare, SIGNAL(triggered()),this, SLOT(OnCompareMethods()));
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -95,7 +101,9 @@ class mepp_component_Correspondence_plugin :
 				<< NULL // menu separator
 				<< actionMahalanobis
 				<< NULL // menu separator
-				<< actionSVM;
+				<< actionSVM
+				<< NULL
+				<< actionCompare;
 		}
 
 		virtual void pre_draw();
@@ -129,6 +137,7 @@ class mepp_component_Correspondence_plugin :
 		void OnPainting();
 		void OnMahalanobis();
 		void OnSVM();
+		void OnCompareMethods();
 
   private:
     int m_currentLabel;
@@ -137,6 +146,7 @@ class mepp_component_Correspondence_plugin :
     QAction *actionPainting;
     QAction *actionMahalanobis;
     QAction *actionSVM;
+    QAction *actionCompare;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };

@@ -13,6 +13,22 @@
 #include <QMdiSubWindow>
 #include <QGLFramebufferObject>
 
+#include <stack>
+#include <ctime>
+
+std::stack<clock_t> tictoc_stack;
+
+void tic() {
+    tictoc_stack.push(clock());
+}
+
+void toc() {
+    std::cout << "Time elapsed: "
+              << ((double)(clock() - tictoc_stack.top())) / CLOCKS_PER_SEC
+              << std::endl;
+    tictoc_stack.pop();
+}
+
 
 void mepp_component_Correspondence_plugin::post_draw()
 {
@@ -182,8 +198,9 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 
 				component_ptr->set_init(2);
 				viewer->recreateListsAndUpdateGL();
-				
+				tic();
 				compareToDataset(component_ptr,meshID);
+				toc();
 			}
 		}
 	}
@@ -229,15 +246,14 @@ void mepp_component_Correspondence_plugin::OnSVM()
 				
 				component_ptr->set_init(2);
 				viewer->recreateListsAndUpdateGL();
-				
+				tic();
 				compareToDatasetSVM(component_ptr,meshID);
+				toc();
 			}
 		}
 	}
 	QApplication::restoreOverrideCursor();
 }
-
-
 
 void mepp_component_Correspondence_plugin::OnMahalanobis()
 {
@@ -289,9 +305,7 @@ void mepp_component_Correspondence_plugin::OnMahalanobis()
 
 
 void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
-{
-	std::cout<< "inside PaintStart"; 
-	
+{	
 		PolyhedronPtr polyhedron_ptr = view->getScenePtr()->get_polyhedron();
 		
 		view->makeCurrent();
@@ -437,8 +451,9 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 				component_ptr->readDescriptor(polyhedron_ptr);
 				
 				component_ptr->setSVM(sourceCorrespondence->getSVM());
-			
+				
 				component_ptr->compareDescriptorToSVM(polyhedron_ptr);
+		
 				viewerI->recreateListsAndUpdateGL();
 			}
 		}
@@ -446,6 +461,92 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 	
 }
 
+void mepp_component_Correspondence_plugin::OnCompareMethods()
+{
+	Viewer* viewerI = NULL;
+	
+	int meshID = 0;
+	
+	if (mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		
+		emit(mw->get_actionNewEmpty()->trigger());
+		
+		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
+		{
+			int nbLabel = 8;
+			std::string meshIDString = polyhedron_ptr->pName;
+			unsigned posB = meshIDString.find_last_of("/");
+			unsigned posE = meshIDString.find_last_of(".off");
+			
+			meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+
+			SettingsDialog dial;
+			if (dial.exec() == QDialog::Accepted)
+			{
+				QApplication::setOverrideCursor(Qt::WaitCursor);
+
+				mw->statusBar()->showMessage(tr(" Ellipse Correspondence..."));
+				
+				
+				component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
+				
+				component_ptr->initParameters(nbLabel,meshID);
+				
+				component_ptr->readDescriptor(polyhedron_ptr);
+				std::cout << "Learn SVM : " << std::endl;
+				tic();
+				component_ptr->learnSVMClassifier(polyhedron_ptr);
+				toc();
+				
+				component_ptr->initializeEllipsoid(polyhedron_ptr);
+				std::cout << "Ellipse parameters : " << std::endl;
+				tic();
+				component_ptr->computeEllipseParameters(polyhedron_ptr);
+				toc();
+				std::cout << "compareToEllipse : " << std::endl;
+				tic();
+				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+				toc();
+				mw->statusBar()->showMessage(tr("Correspondence is done"));
+
+				component_ptr->set_init(2);
+				viewer->recreateListsAndUpdateGL();
+				
+				for(int i=0; i<lwindow.size();i++)
+				{
+					viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+					if(viewerI->getScenePtr()->get_polyhedron()->empty())
+					{
+						
+						std::stringstream ss;
+						ss << "/home/leon/datasetHuman/" << meshID << ".off";
+						viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
+						viewerI->setWindowTitle("SVM");
+						PolyhedronPtr polyhedron_copy_ptr = viewerI->getScenePtr()->get_polyhedron();	
+						Correspondence_ComponentPtr svmcomponent_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_copy_ptr);
+						
+						svmcomponent_ptr->readSelectionBasedOnColor(polyhedron_copy_ptr);
+						
+						svmcomponent_ptr->initParameters(8,meshID);	
+						
+						svmcomponent_ptr->readDescriptor(polyhedron_copy_ptr);
+						std::cout << "compareToSVM : " << std::endl;
+						tic();
+						svmcomponent_ptr->setSVM(component_ptr->getSVM());
+						toc();
+						svmcomponent_ptr->compareDescriptorToSVM(polyhedron_copy_ptr);
+						viewerI->recreateListsAndUpdateGL();
+					}	
+				}
+			}
+		}
+	}
+	
+	
+}
 
 
 
