@@ -328,7 +328,7 @@ inline void Mesh::build_adjacencies()
 			f.corner_angles()[j] = angle;
 			sum += angle;
 		}
-		assert(std::abs(sum - M_PI) < 1e-5);		//algorithm works well with non-degenerate meshes only 
+		//assert(std::abs(sum - M_PI) < 1e-5);		//algorithm works well with non-degenerate meshes only 
 	}
 
 		//define m_turn_around_flag for vertices
@@ -401,7 +401,7 @@ inline bool Mesh::verify()		//verifies connectivity of the mesh and prints some 
 			}
 		}
 	}
-	assert(std::find(map.begin(), map.end(), false) == map.end());
+	//assert(std::find(map.begin(), map.end(), false) == map.end());
 
 	//print some mesh statistics that can be useful in debugging
 	std::cout << "mesh has "	<< m_vertices.size() 

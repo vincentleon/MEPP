@@ -13,6 +13,8 @@
 #include <QMdiSubWindow>
 #include <QGLFramebufferObject>
 
+#include <QFileDialog>
+
 #include <stack>
 #include <ctime>
 
@@ -32,7 +34,7 @@ void toc() {
 
 void mepp_component_Correspondence_plugin::post_draw()
 {
-	if (mw->activeMdiChild() != 0)
+	if (mw->activeMdiChild() != 0) 
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
@@ -68,11 +70,7 @@ void mepp_component_Correspondence_plugin::OnMouseLeftUp(QMouseEvent *event)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-		//if(doesExistComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr))
-		//{
-			m_hasNotBeenPainted=false;
-			//std::cout << "HAS BEEN PAINTED " << std::endl;
-		//}
+		m_hasNotBeenPainted=false;
  	}
 }
 
@@ -119,17 +117,17 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 
 void mepp_component_Correspondence_plugin::showDescriptor()
 {
-	if(mw->activeMdiChild() != 0)
+	/*if(mw->activeMdiChild() != 0)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
-		int nbLabel = 8;
+		int nbLabel = 4;
 		
 		std::string meshIDString = polyhedron_ptr->pName;
 		unsigned posB = meshIDString.find_last_of("/");
-		unsigned posE = meshIDString.find_last_of(".off");
+		unsigned posE = meshIDString.find_last_of(".ply");
 			
 		int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 		
@@ -137,9 +135,36 @@ void mepp_component_Correspondence_plugin::showDescriptor()
 					
 		component_ptr->readDescriptor(polyhedron_ptr);
 		component_ptr->showDescriptor(polyhedron_ptr,m_currentLabel);
-		m_currentLabel = (m_currentLabel + 1) % 8;
+		m_currentLabel = (m_currentLabel + 1) % nbLabel;
 		viewer->recreateListsAndUpdateGL();
+	}*/
+	Viewer* viewerI = NULL;
+	
+	int nbLabel = 4;
+	for(int i=0; i<lwindow.size();i++)
+	{
+		viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+		if(!viewerI->getScenePtr()->get_polyhedron()->empty())
+		{
+			PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
+	
+			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+			
+			
+			std::string meshIDString = polyhedron_ptr->pName;
+			unsigned posB = meshIDString.find_last_of("/");
+			unsigned posE = meshIDString.find_last_of(".ply");
+				
+			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+			
+			component_ptr->initParameters(nbLabel,meshID);
+						
+			component_ptr->readDescriptor(polyhedron_ptr);
+			component_ptr->showDescriptor(polyhedron_ptr,m_currentLabel);
+			viewerI->recreateListsAndUpdateGL();
+		}
 	}
+	m_currentLabel = (m_currentLabel + 1) % nbLabel;
 }
 
 void mepp_component_Correspondence_plugin::OnPainting()
@@ -168,16 +193,22 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 		
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		{
-			int nbLabel = 8;
+			int nbLabel = 4;
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
-			unsigned posE = meshIDString.find_last_of(".off");
+			unsigned posE = meshIDString.find_last_of(".ply");
+			if(posE = meshIDString.size())
+			{
+				posE = meshIDString.find_last_of(".off");
+			}
 			
 			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 
 			SettingsDialog dial;
 			if (dial.exec() == QDialog::Accepted)
 			{
+				nbLabel = dial.spinBox->value();
+				
 				QApplication::setOverrideCursor(Qt::WaitCursor);
 
 				mw->statusBar()->showMessage(tr(" Ellipse Correspondence..."));
@@ -217,10 +248,10 @@ void mepp_component_Correspondence_plugin::OnSVM()
 		
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		{
-			int nbLabel = 8;
+			int nbLabel = 4;
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
-			unsigned posE = meshIDString.find_last_of(".off");
+			unsigned posE = meshIDString.find_last_of(".ply");
 			
 			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 			
@@ -354,8 +385,12 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 {
 	Viewer* viewerI = NULL;
 	
-	for(int m = 1; m <=20; ++m)
+	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory"),"/home/leon/");
+	
+	
+	for(int m = 1; m <=73; ++m)
 	{
+		if (m==65 || m == 39) { continue;}
 		if(m == sourceID) {continue;}
 		emit(mw->get_actionNewEmpty()->trigger());
 		
@@ -365,12 +400,13 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 			if(viewerI->getScenePtr()->get_polyhedron()->empty())
 			{
 				std::stringstream ss;
-				ss << "/home/leon/datasetHuman/" << m << ".off";
+				ss << path.toStdString() << "/" << m << ".ply";
+				
 				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
 				
 				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
 				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
-				component_ptr->initParameters(8,m);
+				component_ptr->initParameters(4,m);
 				component_ptr->readDescriptor(polyhedron_ptr);
 				component_ptr->setEllipse(sourceCorrespondence->getEllipse());
 				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
@@ -430,8 +466,9 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 {
 	Viewer* viewerI = NULL;
 	
-	for(int m = 1; m <= 20; ++m)
-	{
+	for(int m = 1; m <= 73; ++m)
+	{	
+		if (m==65 || m == 39) { continue;}
 		if(m == sourceID) {continue;}
 		emit(mw->get_actionNewEmpty()->trigger());
 		
@@ -441,13 +478,13 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 			if(viewerI->getScenePtr()->get_polyhedron()->empty())
 			{
 				std::stringstream ss;
-				ss << "/home/leon/datasetHuman/" << m << ".off";
+				ss << "/home/leon/modelesFTP/result/" << m << ".ply";
 				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
 				
 				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
 				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
 				
-				component_ptr->initParameters(8,m);	
+				component_ptr->initParameters(4,m);	
 				component_ptr->readDescriptor(polyhedron_ptr);
 				
 				component_ptr->setSVM(sourceCorrespondence->getSVM());
@@ -460,6 +497,50 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 	}
 	
 }
+
+void mepp_component_Correspondence_plugin::OnLearn()
+{
+	Viewer* viewerI = NULL;
+	for(int m=1;m<=73;++m)
+	{
+		if (m==65 || m == 39) { continue;}
+		emit(mw->get_actionNewEmpty()->trigger());
+		for(int i=0; i<lwindow.size();i++)
+		{
+			
+			viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+			if(viewerI->getScenePtr()->get_polyhedron()->empty())
+			{
+				
+				std::stringstream ss;
+				ss << "/home/leon/modelesFTP/result/" << m << ".ply";
+				
+				std::cout << "mesh : " << m << std::endl;
+				
+				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
+				
+				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
+				
+				if(polyhedron_ptr->is_pure_triangle())	
+				{
+					
+					Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+					
+					component_ptr->initParameters(4,m);
+					component_ptr->learnDescriptor(polyhedron_ptr);
+					
+					viewerI->setWindowTitle(ss.str().c_str());
+					viewerI->recreateListsAndUpdateGL();
+				}
+				else
+				{
+					lwindow[i]->close();
+				}
+			}
+		}
+	}
+}
+
 
 void mepp_component_Correspondence_plugin::OnCompareMethods()
 {
@@ -487,7 +568,7 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 			if (dial.exec() == QDialog::Accepted)
 			{
 				QApplication::setOverrideCursor(Qt::WaitCursor);
-
+				nbLabel = dial.spinBox->value();
 				mw->statusBar()->showMessage(tr(" Ellipse Correspondence..."));
 				
 				
@@ -544,8 +625,6 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 			}
 		}
 	}
-	
-	
 }
 
 

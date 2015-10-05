@@ -109,7 +109,7 @@ class Shape
 	int meshID = m_meshID;
 	std::ifstream labels;
 	std::stringstream ssLabels;
-	ssLabels<<"/home/leon/datasetHuman/"<<meshID<<".labels";
+	ssLabels<<"/home/leon/modelesFTP/result/"<<meshID<<".labels";
 	labels.open(ssLabels.str().c_str());
 	if(labels)
 	{
@@ -127,7 +127,7 @@ class Shape
 
 	std::ifstream parts;
 	std::stringstream ssParts;
-	ssParts<<"/home/leon/datasetHuman/"<<meshID<<".parts";
+	ssParts<<"/home/leon/modelesFTP/result/"<<meshID<<".parts";
 	parts.open(ssParts.str().c_str());
 	if(parts)
 	{

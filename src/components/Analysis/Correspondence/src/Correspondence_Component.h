@@ -47,9 +47,6 @@ class Correspondence_Component :
 		
 		void showDescriptor(PolyhedronPtr p, int dim);
 		
-		void selectPoint(PolyhedronPtr p);
-		
-		void paintRegion(PolyhedronPtr p);
 		
 		void readSelectionBasedOnColor(PolyhedronPtr p);
 		

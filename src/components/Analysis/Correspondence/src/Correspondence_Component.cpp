@@ -70,11 +70,19 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
         m_geoAlg = new geodesic::GeodesicAlgorithmExact(&m_gmesh);
 }
 
+void Correspondence_Component::learnDescriptor(PolyhedronPtr p)
+{
+	m_Shape.initFaceLabelsAndSegments();
+	computeDescriptorAllVertices(p);
+	saveDescriptor(p);
+}
+
+
 void Correspondence_Component::saveDescriptor(PolyhedronPtr p)
 {
 	std::ofstream file;
 	std::stringstream ss;
-	ss<<m_Shape.m_meshID<<".semantic";
+	ss<<"/home/leon/modelesFTP/result/"<<m_Shape.m_meshID<<".semantic";
 	file.open(ss.str().c_str());
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end(); ++pVertex)
@@ -98,7 +106,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 	Point3d bb = Point3d(p->xmin(),p->ymin(),p->zmin());
 	std::ifstream file;
 	std::stringstream ss;
-	ss<<"/home/leon/datasetHuman/"<<m_Shape.m_meshID<<".semantic";
+	ss<<"/home/leon/modelesFTP/result/"<<m_Shape.m_meshID<<".semantic";
 	file.open(ss.str().c_str());
 	Vertex_iterator pVertex = p->vertices_begin();
 	if(file)
@@ -145,10 +153,14 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 
 void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
 {
+	initMaxVector(p);
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	{
-		std::vector<double> & localDescr = pVertex->getSemantic();
+		
+		std::vector<double> localDescr = pVertex->getSemantic();
+		this->normalize(localDescr);
+		localDescr[dim] /= m_maxVector[dim];
 		pVertex->color(localDescr[dim],0.5,1.0-localDescr[dim]);
 	}
 }
@@ -156,6 +168,7 @@ void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
 
 void Correspondence_Component::initMaxVector(PolyhedronPtr p)
 {
+	if(m_maxVector.size()!=0){m_maxVector.clear();}
 	for(unsigned l=0;l<m_nbLabel;++l)
 	{
 		double maxV = 0.0;
@@ -164,7 +177,7 @@ void Correspondence_Component::initMaxVector(PolyhedronPtr p)
 		++pVertex)
 		{
 			double val = pVertex->getSemantic()[l];
-			if(val>maxV){maxV = val;}
+			if(val>maxV && val!=std::numeric_limits<double>::infinity()){maxV = val;}
 		}
 		m_maxVector.push_back(maxV);
 	}
@@ -176,14 +189,14 @@ void Correspondence_Component::normalize(vector< double >& descr)
 	{
 		if(m_maxVector[i]!=std::numeric_limits<double>::infinity())
 		{
-			descr[i]/m_maxVector[i];
+			descr[i]/=m_maxVector[i];
 		}
 	}
 }
 
 void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr p)
 {
-	for(unsigned label=0; label>m_nbLabel;++label)
+	for(unsigned label=0; label<m_nbLabel;++label)
 	{
 		std::vector<geodesic::SurfacePoint> sources;
 		int facetC = 0;
@@ -221,7 +234,14 @@ void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr
 			geodesic::SurfacePoint pt(&m_gmesh.vertices()[pIndex]);
 			double distance;
 			unsigned best_source = m_geoAlg->best_source(pt,distance);
-			pVertex->pushSemantic(distance);
+			if(distance == geodesic::GEODESIC_INF)
+			{
+				pVertex->pushSemantic(std::numeric_limits<double>::infinity());
+			}
+			else
+			{
+				pVertex->pushSemantic(distance);
+			}
 		}
 	}
 }
@@ -231,6 +251,7 @@ void Correspondence_Component::computeDescriptorAllVertices(PolyhedronPtr p)
 {
 	this->initGeodesicMesh(p);
 	this->computeGeodesicDistancesAllVertices(p);
+	
 	this->initMaxVector(p);
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
