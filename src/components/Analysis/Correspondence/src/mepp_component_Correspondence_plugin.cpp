@@ -18,6 +18,8 @@
 #include <stack>
 #include <ctime>
 
+#include <dirent.h>
+
 std::stack<clock_t> tictoc_stack;
 
 void tic() {
@@ -539,6 +541,77 @@ void mepp_component_Correspondence_plugin::OnLearn()
 			}
 		}
 	}
+}
+
+void mepp_component_Correspondence_plugin::OnPrepareData()
+{
+	Viewer* viewerI = NULL;
+	std::vector<std::string> files;
+	DIR *dp;
+	struct dirent *dirp;
+	
+	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory"),"/home/leon/");
+	std::string dir = path.toStdString();
+	
+	// read all files in directory
+	if((dp  = opendir(dir.c_str())) == NULL){ std::cout<< "Unable to open directory "<<dir<<std::endl;}
+	while ((dirp = readdir(dp)) != NULL){ files.push_back(std::string(dirp->d_name));}
+	closedir(dp);
+	
+	int nbLabel = 4;
+	SettingsDialog dial;
+	if (dial.exec() == QDialog::Accepted)
+	{
+		nbLabel = dial.spinBox->value();
+	}
+	
+	for(unsigned i=0;i<files.size();++i)
+	{
+		unsigned len = files[i].size();
+		bool isHidden = (files[i][0]=='.');
+		
+		if(!isHidden)
+		{
+			bool isPLY = (files[i].substr(len-3)=="ply");
+			if(isPLY)
+			{
+				emit(mw->get_actionNewEmpty()->trigger());
+				for(int j=0; j<lwindow.size();j++)
+				{
+				
+					viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[j]->widget());
+					if(viewerI->getScenePtr()->get_polyhedron()->empty())
+					{
+						viewerI->getScenePtr()->add_mesh(path+"/"+files[i].c_str(),0,NULL,viewerI);
+						PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
+						
+						if(polyhedron_ptr->is_pure_triangle())
+						{
+							std::cout << files[i] << " is pure triangle"<<std::endl;
+						}
+						else if(polyhedron_ptr->is_pure_quad())
+						{
+							std::cout << files[i] << " is pure quads"<<std::endl;
+						}
+						else	
+						{
+							std::cout << files[i] << " is a mix of triangles and quads"<<std::endl;
+						}
+						std::string meshIDString = files[i];
+						
+						int meshID = atoi(meshIDString.c_str());
+							
+						Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+						
+						component_ptr->initParameters(nbLabel,meshID);
+					}
+				}
+			}
+		}
+	}
+	
+	
+	
 }
 
 

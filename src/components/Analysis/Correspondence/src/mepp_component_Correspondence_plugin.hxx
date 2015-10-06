@@ -47,6 +47,7 @@ class mepp_component_Correspondence_plugin :
 			delete actionSVM;
 			delete actionCompare;
 			delete actionLearn;
+			delete actionPrepareData;
 		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
@@ -96,6 +97,11 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionLearn, SIGNAL(triggered()),this, SLOT(OnLearn()));
 			}
+			actionPrepareData = new QAction(tr("Prepare Data"),this);
+			if( actionPrepareData )
+			{
+				connect(actionPrepareData, SIGNAL(triggered()),this, SLOT(OnPrepareData()));
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -108,10 +114,12 @@ class mepp_component_Correspondence_plugin :
 				<< actionMahalanobis
 				<< NULL // menu separator
 				<< actionSVM
-				<< NULL
+				<< NULL // menu separator
 				<< actionCompare
-				<< NULL
-				<< actionLearn;
+				<< NULL // menu separator
+				<< actionLearn
+				<< NULL // menu separator
+				<< actionPrepareData;
 		}
 
 		virtual void pre_draw();
@@ -147,6 +155,7 @@ class mepp_component_Correspondence_plugin :
 		void OnSVM();
 		void OnCompareMethods();
 		void OnLearn();
+		void OnPrepareData();
 
   private:
     int m_currentLabel;
@@ -157,6 +166,7 @@ class mepp_component_Correspondence_plugin :
     QAction *actionSVM;
     QAction *actionCompare;
     QAction *actionLearn;
+    QAction *actionPrepareData;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };
