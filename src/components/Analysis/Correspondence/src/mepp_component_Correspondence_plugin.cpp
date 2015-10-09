@@ -270,7 +270,7 @@ void mepp_component_Correspondence_plugin::OnSVM()
 				component_ptr->initParameters(nbLabel,meshID);
 				
 				component_ptr->readDescriptor(polyhedron_ptr);
-				
+					
 				component_ptr->learnSVMClassifier(polyhedron_ptr);
 				
 				component_ptr->compareDescriptorToSVM(polyhedron_ptr);
@@ -279,9 +279,8 @@ void mepp_component_Correspondence_plugin::OnSVM()
 				
 				component_ptr->set_init(2);
 				viewer->recreateListsAndUpdateGL();
-				tic();
+		
 				compareToDatasetSVM(component_ptr,meshID);
-				toc();
 			}
 		}
 	}
@@ -386,40 +385,61 @@ void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_ComponentPtr sourceCorrespondence, int sourceID)
 {
 	Viewer* viewerI = NULL;
+	std::vector<std::string> files;
+	DIR *dp;
+	struct dirent *dirp;
 	
 	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory"),"/home/leon/");
+	std::string dir = path.toStdString();
 	
+	// read all files in directory
+	if((dp  = opendir(dir.c_str())) == NULL){ std::cout<< "Unable to open directory "<<dir<<std::endl;}
+	while ((dirp = readdir(dp)) != NULL){ files.push_back(std::string(dirp->d_name));}
+	closedir(dp);
 	
-	for(int m = 1; m <=73; ++m)
+	int nbLabel = 4;
+	SettingsDialog dial;
+	if (dial.exec() == QDialog::Accepted)
 	{
-		if (m==65 || m == 39) { continue;}
-		if(m == sourceID) {continue;}
-		emit(mw->get_actionNewEmpty()->trigger());
+		nbLabel = dial.spinBox->value();
+	}
+	
+	for(unsigned i=0;i<files.size();++i)
+	{
+		unsigned len = files[i].size();
+		bool isHidden = (files[i][0]=='.');
 		
-		for(int i=0; i<lwindow.size();i++)
+		if(!isHidden)
 		{
-			viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
-			if(viewerI->getScenePtr()->get_polyhedron()->empty())
+			bool isPLY = (files[i].substr(len-3)=="ply");
+			if(isPLY)
 			{
-				std::stringstream ss;
-				ss << path.toStdString() << "/" << m << ".ply";
+				emit(mw->get_actionNewEmpty()->trigger());
 				
-				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
-				
-				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
-				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
-				component_ptr->initParameters(4,m);
-				component_ptr->readDescriptor(polyhedron_ptr);
-				component_ptr->setEllipse(sourceCorrespondence->getEllipse());
-				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
-				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
-				viewerI->recreateListsAndUpdateGL();
-				
-				/*component_ptr->initParameters(8,m);	
-				component_ptr->readDescriptor(polyhedron_ptr);
-				component_ptr->setMatrix(sourceCorrespondence->getMatrix());
-				component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
-				component_ptr->compareDescriptorToGaussian(polyhedron_ptr);*/
+				for(int j=0; j<lwindow.size();j++)
+				{
+					viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[j]->widget());
+					if(viewerI->getScenePtr()->get_polyhedron()->empty())
+					{
+						
+						
+						viewerI->getScenePtr()->add_mesh(path+"/"+files[i].c_str(),0,NULL,viewerI);
+						
+						PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
+						std::string meshIDString = polyhedron_ptr->pName;
+						unsigned posB = meshIDString.find_last_of("/");
+						unsigned posE = meshIDString.find_last_of(".ply");
+						int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+			
+						Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+						component_ptr->initParameters(nbLabel,meshID);
+						component_ptr->readDescriptor(polyhedron_ptr);
+						component_ptr->setEllipse(sourceCorrespondence->getEllipse());
+						component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
+						component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+						viewerI->recreateListsAndUpdateGL();
+					}
+				}
 			}
 		}
 	}
@@ -428,6 +448,7 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 void mepp_component_Correspondence_plugin::compareToDatasetMahalanobis(Correspondence_ComponentPtr sourceCorrespondence, int sourceID)
 {
 	Viewer* viewerI = NULL;
+	
 	
 	for(int m = 1; m <= 20; ++m)
 	{
@@ -465,35 +486,67 @@ void mepp_component_Correspondence_plugin::compareToDatasetMahalanobis(Correspon
 }
 
 void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID)
-{
+{	
 	Viewer* viewerI = NULL;
+	std::vector<std::string> files;
+	DIR *dp;
+	struct dirent *dirp;
 	
-	for(int m = 1; m <= 73; ++m)
-	{	
-		if (m==65 || m == 39) { continue;}
-		if(m == sourceID) {continue;}
-		emit(mw->get_actionNewEmpty()->trigger());
+	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory"),"/home/leon/");
+	std::string dir = path.toStdString();
+	
+	// read all files in directory
+	if((dp  = opendir(dir.c_str())) == NULL){ std::cout<< "Unable to open directory "<<dir<<std::endl;}
+	while ((dirp = readdir(dp)) != NULL){ files.push_back(std::string(dirp->d_name));}
+	closedir(dp);
+	
+	int nbLabel = 4;
+	SettingsDialog dial;
+	if (dial.exec() == QDialog::Accepted)
+	{
+		nbLabel = dial.spinBox->value();
+	}
+	
+	for(unsigned i=0;i<files.size();++i)
+	{
+		unsigned len = files[i].size();
+		bool isHidden = (files[i][0]=='.');
 		
-		for(int i=0; i<lwindow.size();i++)
+		if(!isHidden)
 		{
-			viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
-			if(viewerI->getScenePtr()->get_polyhedron()->empty())
+			bool isPLY = (files[i].substr(len-3)=="ply");
+			if(isPLY)
 			{
-				std::stringstream ss;
-				ss << "/home/leon/modelesFTP/result/" << m << ".ply";
-				viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
+				emit(mw->get_actionNewEmpty()->trigger());
 				
-				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();	
-				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+				for(int j=0; j<lwindow.size();j++)
+				{
+					viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[j]->widget());
+					if(viewerI->getScenePtr()->get_polyhedron()->empty())
+					{
+						viewerI->getScenePtr()->add_mesh(path+"/"+files[i].c_str(),0,NULL,viewerI);
+						
+						PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
+						std::string meshIDString = polyhedron_ptr->pName;
+						unsigned posB = meshIDString.find_last_of("/");
+						unsigned posE = meshIDString.find_last_of(".ply");
+						int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+						
+						if(meshID == sourceID)
+						{continue;}
+						
+						Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+						
+						component_ptr->initParameters(nbLabel,meshID);	
+						component_ptr->readDescriptor(polyhedron_ptr);
+						
+						component_ptr->setSVM(sourceCorrespondence->getSVM());
+						
+						component_ptr->compareDescriptorToSVM(polyhedron_ptr);
 				
-				component_ptr->initParameters(4,m);	
-				component_ptr->readDescriptor(polyhedron_ptr);
-				
-				component_ptr->setSVM(sourceCorrespondence->getSVM());
-				
-				component_ptr->compareDescriptorToSVM(polyhedron_ptr);
-		
-				viewerI->recreateListsAndUpdateGL();
+						viewerI->recreateListsAndUpdateGL();
+					}
+				}
 			}
 		}
 	}
@@ -502,7 +555,7 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 
 void mepp_component_Correspondence_plugin::OnLearn()
 {
-	Viewer* viewerI = NULL;
+	/*Viewer* viewerI = NULL;
 	for(int m=1;m<=73;++m)
 	{
 		if (m==65 || m == 39) { continue;}
@@ -539,6 +592,37 @@ void mepp_component_Correspondence_plugin::OnLearn()
 					lwindow[i]->close();
 				}
 			}
+		}
+	}*/
+	
+	
+	if (mw->activeMdiChild() != 0)
+	{	
+		
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		
+		int nbLabel = 4;
+		SettingsDialog dial;
+		if (dial.exec() == QDialog::Accepted)
+		{
+			nbLabel = dial.spinBox->value();
+		}
+		
+		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
+		{
+			std::string meshIDString = polyhedron_ptr->pName;
+			unsigned posB = meshIDString.find_last_of("/");
+			unsigned posE = meshIDString.find_last_of(".ply");
+			
+			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+			
+			std::cout << "Mesh ID : " << meshID << std::endl;
+			component_ptr->initParameters(nbLabel,meshID);
+			std::cout << "Init " << std::endl;
+			component_ptr->learnDescriptor(polyhedron_ptr);
+			std::cout << "learn descriptor " << std::endl;
+			viewer->recreateListsAndUpdateGL();
 		}
 	}
 }
@@ -583,28 +667,37 @@ void mepp_component_Correspondence_plugin::OnPrepareData()
 					if(viewerI->getScenePtr()->get_polyhedron()->empty())
 					{
 						viewerI->getScenePtr()->add_mesh(path+"/"+files[i].c_str(),0,NULL,viewerI);
+						if(viewerI->getScenePtr()->get_polyhedron()->empty())
+						{
+							std::cout << files[i] << " not learnt" << std::endl;
+							continue;
+						}
+						
 						PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
 						
-						if(polyhedron_ptr->is_pure_triangle())
+						if(polyhedron_ptr->is_pure_triangle())	
 						{
-							std::cout << files[i] << " is pure triangle"<<std::endl;
-						}
-						else if(polyhedron_ptr->is_pure_quad())
-						{
-							std::cout << files[i] << " is pure quads"<<std::endl;
-						}
-						else	
-						{
-							std::cout << files[i] << " is a mix of triangles and quads"<<std::endl;
-						}
-						std::string meshIDString = files[i];
-						
-						int meshID = atoi(meshIDString.c_str());
 							
-						Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+							Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+							
+							std::string meshIDString = files[i];
+						        int meshID = atoi(meshIDString.substr(0,len-4).c_str());
+							component_ptr->initParameters(nbLabel,meshID);
+							component_ptr->learnDescriptor(polyhedron_ptr);
+							
+							viewerI->setWindowTitle(files[i].c_str());
+							viewerI->recreateListsAndUpdateGL();
+						}
+						else
+						{
+							lwindow[i]->close();
+						}
 						
-						component_ptr->initParameters(nbLabel,meshID);
+						
+						
+						
 					}
+					
 				}
 			}
 		}
@@ -630,7 +723,7 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 		
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		{
-			int nbLabel = 8;
+			int nbLabel = 4;
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
 			unsigned posE = meshIDString.find_last_of(".off");
@@ -676,7 +769,7 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 					{
 						
 						std::stringstream ss;
-						ss << "/home/leon/datasetHuman/" << meshID << ".off";
+						ss << "/home/leon/quadruClean/result/" << meshID << ".ply";
 						viewerI->getScenePtr()->add_mesh(ss.str().c_str(),0,NULL,viewerI);
 						viewerI->setWindowTitle("SVM");
 						PolyhedronPtr polyhedron_copy_ptr = viewerI->getScenePtr()->get_polyhedron();	
@@ -684,14 +777,14 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 						
 						svmcomponent_ptr->readSelectionBasedOnColor(polyhedron_copy_ptr);
 						
-						svmcomponent_ptr->initParameters(8,meshID);	
+						svmcomponent_ptr->initParameters(nbLabel,meshID);	
 						
 						svmcomponent_ptr->readDescriptor(polyhedron_copy_ptr);
 						std::cout << "compareToSVM : " << std::endl;
 						tic();
 						svmcomponent_ptr->setSVM(component_ptr->getSVM());
-						toc();
 						svmcomponent_ptr->compareDescriptorToSVM(polyhedron_copy_ptr);
+						toc();
 						viewerI->recreateListsAndUpdateGL();
 					}	
 				}

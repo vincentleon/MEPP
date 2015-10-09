@@ -82,7 +82,9 @@ void Correspondence_Component::saveDescriptor(PolyhedronPtr p)
 {
 	std::ofstream file;
 	std::stringstream ss;
-	ss<<"/home/leon/modelesFTP/result/"<<m_Shape.m_meshID<<".semantic";
+	
+	ss<<"/home/leon/quadruClean/result/"<<m_Shape.m_meshID<<".semantic";
+	std::cout << "saving file : " << ss.str() << std::endl;
 	file.open(ss.str().c_str());
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end(); ++pVertex)
@@ -106,7 +108,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p)
 	Point3d bb = Point3d(p->xmin(),p->ymin(),p->zmin());
 	std::ifstream file;
 	std::stringstream ss;
-	ss<<"/home/leon/modelesFTP/result/"<<m_Shape.m_meshID<<".semantic";
+	ss<<"/home/leon/quadruClean/result/"<<m_Shape.m_meshID<<".semantic";
 	file.open(ss.str().c_str());
 	Vertex_iterator pVertex = p->vertices_begin();
 	if(file)
@@ -736,7 +738,6 @@ void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 	std::vector<svm_node*> inputs;
 	selectionProblem.x = Malloc(struct svm_node *, selectionProblem.l);
 	
-	unsigned j=0;
 	for(unsigned s=0;s<m_selection.size();++s)
 	{
 		std::vector<double> & descr = m_selection[s]->getSemantic();
@@ -760,27 +761,53 @@ void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 	selectionProblem.y= labels.data();
 	
 	struct svm_parameter param;
-	param.svm_type = ONE_CLASS;
+	param.svm_type = C_SVC;
 	param.kernel_type = GAUSSIAN;
 	param.degree = 3;
 	param.gamma = 1.0/m_nbLabel;	// 1/num_features
 	param.coef0 = 0;
-	param.nu = 0.5;
+	param.nu = 2e-5;
 	param.cache_size = 100;
-	param.C = 1;
-	param.eps = 1e-3;
+	param.C = pow(2,5);
+	param.eps = 0.5;
 	param.p = 0.1;
 	param.shrinking = 1;
 	param.probability = 0;
 	param.nr_weight = 0;
 	param.weight_label = NULL;
 	param.weight = NULL;
-	const char * error_msg = svm_check_parameter(&selectionProblem,&param);
-	if(error_msg)
+	
+	// grid search for svm parameters
+	int bestC = 0;
+	int bestG = 0;
+	int maxScore = 0;
+	for(int cExp = -5; cExp <=30; cExp+=2)
 	{
-		fprintf(stderr,"Error: %s\n",error_msg);
-		exit(1);
+		for(int gExp = -3; gExp <= 30; gExp+=2)
+		{
+			param.gamma = pow(2,gExp);
+			param.C = pow(2,cExp);
+			m_svmModel = svm_train(&selectionProblem,&param);
+			int score = 0;
+			for(unsigned i = 0;i<labels.size();++i)
+			{
+				double predictedLabel = svm_predict(m_svmModel,selectionProblem.x[i]);
+				if(predictedLabel == labels[i])
+				{	
+					score++;
+				}
+			}
+			if(score > maxScore)
+			{
+				bestC = cExp;
+				bestG = gExp;
+				maxScore = score;
+			}
+		}
 	}
+	std::cout << bestC<< " " << bestG << std::endl;
+	param.gamma = pow(2,bestG);
+	param.C = pow(2,bestC);
 	m_svmModel = svm_train(&selectionProblem,&param);
 }
 
