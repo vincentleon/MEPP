@@ -57,6 +57,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   endif( ${CMAKE_BUILD_TYPE} MATCHES "Debug" )
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
+
 #------------------------------------------------------------------------------
 # MSVC
 #------------------------------------------------------------------------------
@@ -254,7 +257,11 @@ if(ASSIMP_FOUND)
 else(ASSIMP_FOUND)
   message(STATUS "ASSIMP (optional) not found. Please set ASSIMP_ROOT_DIR.")
 endif(ASSIMP_FOUND)
-  
+ 
+# Find Eigen
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
+
 include_directories ( ${XML_PARSER_INCLUDE_DIR} )
   
 if (GLEW_FOUND)

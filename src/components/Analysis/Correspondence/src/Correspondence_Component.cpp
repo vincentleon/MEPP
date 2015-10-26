@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <stdlib.h>
 	
 
 #include "../../../../mepp/mepp_component.h"
@@ -20,18 +21,18 @@
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
 
-Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p)
+Correspondence_Component::Correspondence_Component(Viewer* v, PolyhedronPtr p) : mepp_component(v,p), m_segCtr(p)
 {
 	componentName = "Correspondence_Component";
 	init = 1;
 	p->set_index_vertices();
 }
 
-void Correspondence_Component::initParameters(int nbLabel, int meshId)
+void Correspondence_Component::initParameters(int nbLabel, int meshId,std::string meshDir)
 {
 	m_Shape.m_meshID = meshId;
 	m_nbLabel = nbLabel;
-	m_Shape.initFaceLabelsAndSegments();
+	m_Shape.initFaceLabelsAndSegments(meshDir);
 }
 
 
@@ -70,20 +71,20 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
         m_geoAlg = new geodesic::GeodesicAlgorithmExact(&m_gmesh);
 }
 
-void Correspondence_Component::learnDescriptor(PolyhedronPtr p)
+void Correspondence_Component::learnDescriptor(PolyhedronPtr p,std::string meshDir)
 {
-	m_Shape.initFaceLabelsAndSegments();
+	m_Shape.initFaceLabelsAndSegments(meshDir);
 	computeDescriptorAllVertices(p);
-	saveDescriptor(p);
+	saveDescriptor(p,meshDir);
 }
 
 
-void Correspondence_Component::saveDescriptor(PolyhedronPtr p)
+void Correspondence_Component::saveDescriptor(PolyhedronPtr p,std::string meshDir)
 {
 	std::ofstream file;
 	std::stringstream ss;
 	
-	ss<<"/home/leon/quadruClean/result/"<<m_Shape.m_meshID<<".semantic";
+	ss<<meshDir<<"/"<<m_Shape.m_meshID<<".semantic";
 	std::cout << "saving file : " << ss.str() << std::endl;
 	file.open(ss.str().c_str());
 	for(Vertex_iterator pVertex = p->vertices_begin();
@@ -103,12 +104,12 @@ void Correspondence_Component::saveDescriptor(PolyhedronPtr p)
 	file.close();
 }
 
-void Correspondence_Component::readDescriptor(PolyhedronPtr p)
+void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDir)
 {
 	Point3d bb = Point3d(p->xmin(),p->ymin(),p->zmin());
 	std::ifstream file;
 	std::stringstream ss;
-	ss<<"/home/leon/quadruClean/result/"<<m_Shape.m_meshID<<".semantic";
+	ss<<meshDir<<"/"<<m_Shape.m_meshID<<".semantic";
 	file.open(ss.str().c_str());
 	Vertex_iterator pVertex = p->vertices_begin();
 	if(file)
@@ -394,15 +395,10 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 		{
  			x[l] = localDescr[l];
 		}
-		/*std::cout << x.dimension();
-		std::cout << mu.dimension();
 		
-		std::cout << std::endl;*/
 		myVector distToMean = x -mu;
 		myMatrix distToMeanT = Linear_algebraCd<double>::transpose(distToMean);
-		/*std::cout << distToMeanT.row_dimension() << " " << distToMeanT.column_dimension()<< std::endl;;
-		std::cout << inverse.row_dimension() << " " << inverse.column_dimension()<< std::endl;;
-		std::cout << std::endl<< std::endl;;*/
+		
 		myVector mahalanobis = (distToMeanT * inverse * distToMean);
 		
 		dist.push_back(sqrt(mahalanobis[0]));
@@ -413,7 +409,6 @@ void Correspondence_Component::compareDescriptorToGaussian(PolyhedronPtr p)
 	    pVertex!=p->vertices_end();++pVertex)
 	{
  		float m = dist[v];
-		std::cout <<std::endl << m << " ";
 		if( m < m_threshold )
 		{
 			//pVertex->color(m/m_threshold,m/m_threshold,m/m_threshold);
@@ -441,6 +436,7 @@ void Correspondence_Component::compareDescriptorToSVM(PolyhedronPtr p)
 		}
 		x[m_nbLabel].index = -1;
 		double predictedLabel = svm_predict(m_svmModel,x);
+		free(x);
 		if(predictedLabel == 1)
 		{
 			pVertex->color(0,0,0);
@@ -466,7 +462,6 @@ Vertex_handle Correspondence_Component::getSelectionCenter()
 		{
 			double dist = L2Dist(m_selection[i]->getSemantic(),m_selection[j]->getSemantic());
 			score+=dist*dist;
-
 		}
 		if(score<scoreMin)
 		{
@@ -567,13 +562,9 @@ void Correspondence_Component::readSelectionBasedOnColor(PolyhedronPtr p)
 
 void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
 {
-	//this->readSelectionBasedOnColor(p);
 	m_centreSelection = getSelectionCenter();
-	//m_centreSelection->color(1,0,0);
 	Vertex_handle extremumSelection = getFurtherFromSelectionCenter();
-	//extremumSelection->color(1,0,0);
 	m_isolineValue = L2Dist(m_centreSelection->getSemantic(),extremumSelection->getSemantic());
-	
 	m_ellipse = std::vector<double>(m_nbLabel,m_isolineValue);
 }
 
@@ -593,7 +584,7 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	
 	std::vector<double> lBounds(dim,0.0);
 	opt.set_lower_bounds(lBounds);
-	opt.set_xtol_rel(1e-4);
+	opt.set_xtol_rel(1e-5);
 	double minf;
 	
 	nlopt::result res = opt.optimize(ell,minf);
@@ -781,7 +772,7 @@ void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 	int bestC = 0;
 	int bestG = 0;
 	int maxScore = 0;
-	for(int cExp = -5; cExp <=30; cExp+=2)
+	/*for(int cExp = -5; cExp <=30; cExp+=2)
 	{
 		for(int gExp = -3; gExp <= 30; gExp+=2)
 		{
@@ -807,8 +798,15 @@ void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 	}
 	std::cout << bestC<< " " << bestG << std::endl;
 	param.gamma = pow(2,bestG);
-	param.C = pow(2,bestC);
+	param.C = pow(2,bestC);*/
+	param.gamma = pow(2,1);
+	param.C = pow(2,17);
 	m_svmModel = svm_train(&selectionProblem,&param);
+	for(unsigned s=0;s<m_selection.size();++s)
+	{
+		free(selectionProblem.x[s]);
+	}
+	free(selectionProblem.x);
 }
 
 // Energy Functions 
@@ -923,8 +921,8 @@ double Correspondence_Component::computeEnergyGaussian(const vector< double >& t
 		
 		dist.push_back(sqrt(mahalanobis[0]));
 	}
-	//double distMax = *std::max_element(dist.begin(),dist.end());
-	double distMax = 1.0;
+	double distMax = *std::max_element(dist.begin(),dist.end());
+	//double distMax = 1.0;
 	
 	int f = 0;
 	for(unsigned i=0;i<m_selection.size();++i)
@@ -936,7 +934,7 @@ double Correspondence_Component::computeEnergyGaussian(const vector< double >& t
 
 		bool inSelection = (m_tag[v] <=2);
 
-		if(!inGaussian && inSelection)
+		if(inGaussian && !inSelection)
 		{
 			double incr= m;
 			energy+=incr*incr;
@@ -1033,6 +1031,42 @@ void Correspondence_Component::setThreshold(double thresh)
 	m_threshold = thresh;
 }
 
+void Correspondence_Component::scaleMesh(Polyhedron::Iso_cuboid bbox, PolyhedronPtr p)
+{
+	double dx = bbox.xmax() - bbox.xmin();
+	double dy = bbox.ymax() - bbox.ymin();
+	double dz = bbox.zmax() - bbox.zmin();
+	
+	Polyhedron::Iso_cuboid nbox = p->bbox();
+	double nx = nbox.xmax() - nbox.xmin();
+	double ny = nbox.ymax() - nbox.ymin();
+	double nz = nbox.zmax() - nbox.zmin();
+	
+	
+	double scale = 1.0;
+	
+	if(dx > std::max(dy,dz))
+	{
+		scale = dx/nx;
+	}
+	if(dy > std::max(dx,dz))
+	{
+		scale = dy/ny;
+	}
+	else
+	{
+		scale = dz/nz;
+	}
+	for(Vertex_iterator pVertex = p->vertices_begin();
+		pVertex!=p->vertices_end();++pVertex)
+	{
+		Point3d vp = pVertex->point();
+		Point3d nvp(vp.x()*scale,vp.y()*scale,vp.z()*scale);
+		pVertex->point() = nvp;
+	}
+	p->compute_bounding_box();
+	p->compute_normals();
+}
 
 //// NON-MEMBER FUNCTIONS
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
@@ -1068,6 +1102,7 @@ double objectiveFunGaussian(const std::vector<double> & threshold, std::vector<d
 	double energy = correspondenceComp->computeEnergyGaussian(threshold);
 	return energy;
 }
+
 
 
 #endif

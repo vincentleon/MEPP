@@ -17,6 +17,7 @@
 #include <set>
 
 #include "Correspondence_Component.h"
+#include "SegmentController.h"
 
 typedef boost::shared_ptr<Correspondence_Component> Correspondence_ComponentPtr;
 
@@ -102,6 +103,21 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionPrepareData, SIGNAL(triggered()),this, SLOT(OnPrepareData()));
 			}
+			actionCut = new QAction(tr("Cut"),this);
+			if( actionCut )
+			{
+				connect(actionCut, SIGNAL(triggered()),this, SLOT(OnCut()));
+			}
+			actionAddSegment = new QAction(tr("Add segment"),this);
+			if( actionAddSegment )
+			{
+				connect(actionAddSegment, SIGNAL(triggered()),this, SLOT(OnAddSegment()));
+			}
+			actionGlue = new QAction(tr("Glue"),this);
+			if( actionGlue ) 
+			{
+				connect(actionGlue, SIGNAL(triggered()),this, SLOT(OnGlue()));
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -110,6 +126,9 @@ class mepp_component_Correspondence_plugin :
 				<< NULL // menu separator
 				<< actionCorrespondence
 				<< actionShowDescriptor
+				<< actionCut
+				<< actionAddSegment
+				<< actionGlue
 				<< NULL // menu separator
 				<< actionMahalanobis
 				<< NULL // menu separator
@@ -156,7 +175,10 @@ class mepp_component_Correspondence_plugin :
 		void OnCompareMethods();
 		void OnLearn();
 		void OnPrepareData();
-
+		void OnCut();
+		void OnAddSegment();
+		void OnGlue();
+		
   private:
     int m_currentLabel;
     QAction *actionCorrespondence;
@@ -167,6 +189,9 @@ class mepp_component_Correspondence_plugin :
     QAction *actionCompare;
     QAction *actionLearn;
     QAction *actionPrepareData;
+    QAction *actionCut;
+    QAction *actionAddSegment;
+    QAction *actionGlue;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };

@@ -104,12 +104,12 @@ class Shape
 	}
       }
       
-      void initFaceLabelsAndSegments()
+      void initFaceLabelsAndSegments(std::string meshDir)
       {
 	int meshID = m_meshID;
 	std::ifstream labels;
 	std::stringstream ssLabels;
-	ssLabels<<"/home/leon/quadruClean/result/"<<meshID<<".labels";
+	ssLabels<<meshDir<<"/"<<meshID<<".labels";
 	labels.open(ssLabels.str().c_str());
 	if(labels)
 	{
@@ -127,7 +127,7 @@ class Shape
 
 	std::ifstream parts;
 	std::stringstream ssParts;
-	ssParts<<"/home/leon/quadruClean/result/"<<meshID<<".parts";
+	ssParts<<meshDir<<"/"<<meshID<<".parts";
 	parts.open(ssParts.str().c_str());
 	if(parts)
 	{

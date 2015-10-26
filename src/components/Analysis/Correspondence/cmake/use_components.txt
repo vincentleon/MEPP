@@ -3,3 +3,4 @@
 
 # Here (if uncommented), we use the Curvature component (for example)
 #set( use_components ../../Analysis/Curvature/src/Curvature_Component.cpp ../../Analysis/Curvature/src/extract_Vpropres.cpp )
+set( use_components ../../Tools/Boolean_Operations/src/Boolean_Operations_Component.cpp )

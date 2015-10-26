@@ -177,6 +177,10 @@ else(ASSIMP_FOUND)
   message(STATUS "ASSIMP (optional) not found. Please set ASSIMP_ROOT_DIR.")
 endif(ASSIMP_FOUND)
 
+# Find Eigen
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
+
 include_directories ( ${XML_PARSER_INCLUDE_DIR} )
 
 if (FFMPEG_FOUND)
@@ -215,7 +219,7 @@ file(
 set( source_files ${source_files} ../../../mepp/mepp_action.hxx )
 
 add_library(
-	${COMPONENT_NAME}
+	${COMPONENT_NAME} 
 	SHARED
 	${source_files}
 	${use_components}

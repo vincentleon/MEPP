@@ -23,6 +23,8 @@
 
 #include "svm.h"
 
+#include "SegmentController.h"
+
 typedef CGAL::Linear_algebraCd<double>::Matrix myMatrix;
 typedef CGAL::Linear_algebraCd<double>::Vector myVector;
 
@@ -39,14 +41,13 @@ class Correspondence_Component :
 		
 		~Correspondence_Component() {}
 		
-		void initParameters(int nbLabel, int meshId);
+		void initParameters(int nbLabel, int meshId, std::string meshDir);
 		
-		void learnDescriptor(PolyhedronPtr p);
+		void learnDescriptor(PolyhedronPtr p, std::string meshDir);
 		
-		void readDescriptor(PolyhedronPtr p);
+		void readDescriptor(PolyhedronPtr p,std::string meshDir);
 		
 		void showDescriptor(PolyhedronPtr p, int dim);
-		
 		
 		void readSelectionBasedOnColor(PolyhedronPtr p);
 		
@@ -94,8 +95,11 @@ class Correspondence_Component :
 		void setInverseMatrix(const myMatrix & m);
 		void setDeterminant(double det);
 		void setThreshold(double thresh);
-		void setSVM(svm_model * svm);
+		void setSVM(svm_model * svm);	
 		
+		SegmentController m_segCtr;
+		
+		void scaleMesh(Polyhedron::Iso_cuboid bbox, PolyhedronPtr p);
 	private : 
 		
 		int m_nbLabel;
@@ -133,7 +137,7 @@ class Correspondence_Component :
 		
 		void initGeodesicMesh(PolyhedronPtr p);
 		
-		void saveDescriptor(PolyhedronPtr p);
+		void saveDescriptor(PolyhedronPtr p,std::string meshDir);
 		
 		void initMaxVector(PolyhedronPtr p);
 		void normalize(std::vector<double> & descr);
@@ -147,6 +151,7 @@ class Correspondence_Component :
 		
 		void tagSelectionVertices(PolyhedronPtr p);
 		
+		
 
 };
 
@@ -157,6 +162,7 @@ double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & g
 double objectiveFunRotation(const std::vector<double> & ellipse, std::vector<double> & grad, void *data);
 
 double objectiveFunGaussian(const std::vector<double> & threshold, std::vector<double> & grad, void *data);
+
 
 
 #endif
