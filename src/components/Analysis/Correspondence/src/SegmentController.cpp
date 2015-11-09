@@ -4,6 +4,14 @@
 
 #include <CGAL/Polyhedron_items_with_id_3.h>
 #include <../../src/components/Tools/Boolean_Operations/src/Boolean_Operations_Component.h>
+#include <viewer.hxx>
+#include <Polyhedron/polyhedron.h>
+#include <QGLViewer/vec.h>
+#include <QGLViewer/quaternion.h>
+#include <boost/graph/graph_concepts.hpp>
+
+
+typedef boost::shared_ptr<Boolean_Operations_Component> Boolean_Operations_ComponentPtr;
 
 SegmentController::SegmentController(PolyhedronPtr p) : m_polyhedron(p)
 {}
@@ -158,107 +166,451 @@ void SegmentController::cutSegments()
 				m_mainPart.push_back(p);
 			}
 		}
+		//p->keep_largest_connected_components(1);
 		p->compute_bounding_box();
 		p->compute_normals();
 		p->calc_nb_components();
 	}
 }
 
-void SegmentController::glueSegments()
+void SegmentController::joinSegments(Viewer * v)
 {
-	// Init the indices of the halfedges and the vertices
-	for(unsigned p=0; p<m_parts.size();++p)
-	{
-		PolyhedronPtr part = m_parts[p]; 
+	std::vector<double> coords;
+	std::vector<int> tris;
 	
-		simplePolyhedron * mesh = convertToSimplePolyhedron(part);
-		mesh->keep_largest_connected_components(1); //remove isolated vertices
-		mesh->normalize_border();
-		// compute correspondence
-		std::map<simplePolyhedron::Vertex_handle,simplePolyhedron::Vertex_handle> corresp;
-		for(unsigned m=0;m<m_mainPart.size();++m)
+	/*for(unsigned partID = 0; partID < (m_parts.size() + m_mainPart.size()) ;++partID)
+	{
+		int offset = coords.size() / 3;
+		PolyhedronPtr p;
+		if(partID >= m_parts.size())
 		{
-			simplePolyhedron * mainPart = convertToSimplePolyhedron(m_mainPart[m]);
-			mainPart->keep_largest_connected_components(1); //remove isolated vertices
-			auto h = mesh->halfedges_begin();
-			for(;h!=mesh->halfedges_end();++h)
+			p = m_mainPart[partID-m_parts.size()];
+		}
+		else
+		{
+			p = m_parts[partID];
+		}*/
+	for(unsigned partID =0; partID <  v->getScenePtr()->get_nb_polyhedrons(); ++partID)
+ 	{	
+		int offset = coords.size() / 3;
+		PolyhedronPtr p = v->getScenePtr()->get_polyhedron(partID);
+		p->set_index_vertices();
+		
+		for(auto pVertex = p->vertices_begin();
+		pVertex != p->vertices_end();++pVertex)
+		{
+			Point3d vertexInWorld = toWorld(v,partID,pVertex->point());
+			//Point3d vertexInWorld = pVertex->point();
+			coords.push_back(vertexInWorld.x());
+			coords.push_back(vertexInWorld.y());
+			coords.push_back(vertexInWorld.z());
+		}// collect all vertices for builder
+		
+		for(auto pFacet = p->facets_begin();
+		pFacet!=p->facets_end();++pFacet)
+		{
+			auto h = pFacet->facet_begin();
+			do
 			{
-				if(h->is_border())
+				tris.push_back(h->vertex()->tag()+offset);
+			}
+			while(++h!=pFacet->facet_begin());
+		}// collect all faces for builder
+	}
+	
+	PolyhedronPtr sp(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	sp->delegate(builder);
+	v->addFrame();
+	v->getScenePtr()->add_polyhedron(sp);
+	sp->compute_normals();
+	sp->calc_nb_components();
+	sp->calc_nb_boundaries();
+	
+	/*
+	 * Then extract all borders
+	 * Then, contour following correspondence (~todo)
+	 * Then convert to simplePolyhedron (ok)
+	 * Then use CGAL deformation with appropriate ROI (see example)
+	 */
+	
+	/////////////////////////////////////////////////////////
+	/// Extract all borders from sp
+	/////////////////////////////////////////////////////////
+	/*std::map<Halfedge_handle,bool> isVisited;
+	std::vector<std::vector<Halfedge_handle> > borders; // all the borders belonging to part "p"
+	
+	sp->normalize_border();
+	for(auto he = sp->border_halfedges_begin(); he!=sp->halfedges_end();++he)
+	{
+		if(! (isVisited[he] && isVisited[he->opposite()]) )  //halfedge has not been visited, it's a new border loop
+		{
+			visitBorder(he,isVisited,borders.back()); //Visit the neighbours, if they are border hE, add them to the border
+			borders.resize(borders.size()+1); //Add a new, empty borders
+		}
+	}
+	
+	for(auto b=borders.begin();b!=borders.end();++b)
+	{
+		if(b->size() == 0)
+		{
+			b = borders.erase(b);
+			if(b == borders.end()) { break;}
+		}
+	}
+	/////////////////////////////////////////////////////////
+	/// Border correspondence
+	/////////////////////////////////////////////////////////
+	Halfedge_handle f1;
+	Halfedge_handle f2;
+	Halfedge_handle p1;
+	Halfedge_handle p2;
+	Halfedge_handle c1;
+	Halfedge_handle c2;
+	
+	c1 = borders[0][0]; // first sewing halfedge
+	double thresh = 100.0;
+	int borderIndex;
+	
+	double distMin = std::numeric_limits<double>::max();
+	for(unsigned b=1;b<borders.size();++b) // find the corresponding halfedge on other borders
+	{
+		for(unsigned h =0; h < borders[b].size(); ++h)
+		{
+			double dist = CGAL::squared_distance(c1->vertex()->point(),borders[b][h]->vertex()->point());
+			if(dist<distMin)// && dist < thresh)
+			{
+				distMin = dist;
+				c2 = borders[b][h];
+				borderIndex = b;
+			}
+		}
+	}
+	std::vector<Halfedge_handle> cBord1; cBord1.push_back(c1);
+	std::vector<Halfedge_handle> cBord2; cBord2.push_back(c2);
+	
+	Vector V1 = c1->vertex()->point() - c1->opposite()->vertex()->point(); 
+	Vector V2 = c2->vertex()->point() - c2->opposite()->vertex()->point();
+	if( V1*V2 < 0) {c2 = c2->opposite();}
+	
+	
+	
+	p1 = c1; f1 = c1;
+	p2 = c2; f2 = c2;
+	
+	bool endB1 = false;
+	bool endB2 = false;
+	
+	
+	
+	do
+	{
+		// Find which halfedge to increment (c1 or c2)
+		Halfedge_around_vertex_circulator p1N = p1->vertex()->vertex_begin();
+		Halfedge_around_vertex_circulator p2N = p2->vertex()->vertex_begin();
+		double distMinB1 = std::numeric_limits<double>::max();
+		double distMinB2 = std::numeric_limits<double>::max();
+		
+		// Which hE on Border1 is closest to p2
+		Halfedge_handle candidateC1;
+		do{
+			if(!p1N->opposite()->is_border_edge()){continue;}
+			if(p1N->opposite() == p1->opposite()){continue;} // make sure we really increment, and don't go backward
+			double dist = CGAL::squared_distance(p2->vertex()->point(),p1N->opposite()->vertex()->point());
+			//std::cout << dist << std::endl;
+			if(dist < distMinB1)// && dist < thresh)
+			{
+				distMinB1 = dist;
+				candidateC1 = p1N->opposite();
+			}
+		}
+		while(++p1N != p1->vertex()->vertex_begin());
+		
+		// Which hE on Border2 is closest to p1
+		Halfedge_handle candidateC2;
+		do{
+			if(!p2N->opposite()->is_border_edge()){continue;}
+			if(p2N->opposite() == p2->opposite()){continue;} // make sure we really increment, and don't go backward
+			double dist = CGAL::squared_distance(p1->vertex()->point(),p2N->opposite()->vertex()->point());
+			//std::cout << dist << std::endl;
+			if(dist < distMinB2)// && dist < thresh)
+			{
+				distMinB2 = dist;
+				candidateC2 = p2N->opposite();
+			}
+		}
+		while(++p2N != p2->vertex()->vertex_begin());
+		
+		// Choose the less costly incrementation
+		//std::cout << distMinB1 << " " << distMinB2 << std::endl;
+		if(distMinB1 < distMinB2)
+		{
+			//std::cout << "Increment C1 " << std::endl;
+			c1 = candidateC1;
+		}
+		else
+		{
+			//std::cout << "Increment C2 " << std::endl;
+			c2 = candidateC2;
+		}
+		cBord1.push_back(c1); p1=c1;
+		cBord2.push_back(c2); p2=c2;
+		if(c1 == f1){endB1 = true;}
+		if(endB1 && (c2==f2))
+		{break;}
+		if(c2 == f2){endB2 = true;}
+		if(endB2 && (c1==f1))
+		{
+			break;
+		}
+	}
+	while( true ); 
+	
+	//For now, add faces
+	for(unsigned b = 0; b < cBord1.size();++b)
+	{
+		//auto hnew = sp->split_edge(cBord1[b]); hnew->vertex()->point() = cBord2[b]->vertex()->point();
+		//hnew = sp->split_edge(cBord2[b]); hnew->vertex()->point() = cBord1[b]->vertex()->point();
+		Point3d mem = cBord1[b]->vertex()->point();
+		cBord1[b]->vertex()->point() = cBord2[b]->vertex()->point();
+		cBord2[b]->vertex()->point() = mem;
+		
+	}*/
+	sp->compute_normals();
+	
+	/////////////////////////////////////////////////////////
+	/// Non rigid deformation
+	/////////////////////////////////////////////////////////
+	
+	
+}
+
+void SegmentController::glueSegments(Viewer * v)
+{
+	/////////////////////////////////////////////////////////
+	/// Extract all borders for all parts in the scene
+	/////////////////////////////////////////////////////////
+	/*int nbSeg = m_parts.size() + m_mainPart.size();
+	
+	// Get all borders from all parts m[id_of_part][id_of_border][id_of_halfedge]
+	std::vector<std::vector<std::vector<Halfedge_handle> > > m_borderHE(nbSeg);
+	
+	for(unsigned p=0; p< nbSeg;++p)
+	{
+		std::map<Halfedge_handle,bool> isVisited;
+		std::vector<std::vector<Halfedge_handle> > & borders = m_borderHE[p]; // all the borders belonging to part "p"
+		PolyhedronPtr part;
+		if(p < m_parts.size())
+		{
+			part = m_parts[p];
+		}
+		else
+		{
+			part  = m_mainPart[p - m_parts.size()];
+		}
+		part->normalize_border();
+		for(auto he = part->border_halfedges_begin(); he!=part->halfedges_end();++he)
+		{
+			if(! (isVisited[he] && isVisited[he->opposite()]) )  //halfedge has not been visited, it's a new border loop
+			{
+				visitBorder(he,isVisited,borders.back()); //Visit the neighbours, if they are border hE, add them to the border
+				borders.resize(borders.size()+1); //Add a new, empty borders
+			}
+		}
+		
+		for(auto b=borders.begin();b!=borders.end();++b)
+		{
+			if(b->size() == 0)
+			{
+				b = borders.erase(b);
+				if(b == borders.end()) { break;}
+			}
+		}		
+	}
+	
+	
+	
+	std::map<Halfedge_handle,Halfedge_handle> corresHE;
+	std::map<Halfedge_handle,bool> hasCorres;
+	std::map<Halfedge_handle,Point3d> wcCorres;
+	
+	for(unsigned p = 0; p< m_parts.size(); ++p)
+	{
+		PolyhedronPtr & part = m_parts[p];
+		//for one border of p
+		for(unsigned b=0;b<m_borderHE[p].size();++b)
+		{
+			Halfedge_handle fHE;
+			double distMinOverBorder = std::numeric_limits<double>::max();
+			for(unsigned h = 0; h< m_borderHE[p][b].size();++h)
+			{	
+				Halfedge_handle bh = m_borderHE[p][b][h];
+				Point3d wcp = toWorld(v,p,bh->vertex()->point());
+				
+				double distMin = std::numeric_limits<double>::max();
+				for(unsigned q = 0; q < m_mainPart.size(); ++q)
 				{
-					double distMax = std::numeric_limits<double>::max();
-					for(auto pVertex = mainPart->vertices_begin(); pVertex!= mainPart->vertices_end();++pVertex)
+					// For now take all mesh as ROI, maybe make it smaller later
+					for(Halfedge_iterator hE = m_mainPart[q]->halfedges_begin(); hE!= m_mainPart[q]->halfedges_end();++hE)
 					{
-						double dist = CGAL::squared_distance(pVertex->point(),h->vertex()->point());
-						if(dist < distMax)
+						Point3d wcmp = toWorld(v,m_parts.size()+q,hE->vertex()->point());
+						
+						if(hasCorres[hE]){continue;}
+						double dist = CGAL::squared_distance(wcmp,wcp);
+						if(dist < distMin)
 						{
-							corresp[h->vertex()] = pVertex;
-							distMax = dist;
+							distMin = dist;
+							corresHE[bh] = hE;
+							wcCorres[bh] = wcmp;
+							hasCorres[hE] = true;
 						}
 					}
 				}
+				if(wcCorres.count(bh)==0){continue;}
+				if(distMin<distMinOverBorder)
+				{
+					fHE = bh;
+					distMinOverBorder = distMin;
+				}
 			}
-		}
-		
-		CGAL::set_halfedgeds_items_id(*mesh);
-		
-		// Create a deformation object
-		surface_mesh_deformation deform_mesh(*mesh);
-		// Definition of the Region Of Interest
-		/*for(simplePolyhedron::Vertex_iterator it =  mesh->vertices_begin(); it!= mesh->vertices_end(); ++it)
-		{
-			deform_mesh.insert_roi_vertex(it);
-		}*/
-		// Select control vertices
-		
-		auto h = mesh->halfedges_begin();
-		for(;h!=mesh->halfedges_end();++h)
-		{
-			if(h->is_border())
+			// Sew the first edge
+			int q = partID;
+			part->split_edge(fHE); // create new geometry using euler operators
+			fHE->next()->vertex()->point() = toPartFrame(v,p,wcCorres[fHE]); // displace new vertex to coorresponding point
+			Halfedge_handle current1;
+			Halfedge_handle previous1;
+			Halfedge_handle previous2 = corresHE[previous1];
+			current1 = fHE;
+			do
 			{
-				deform_mesh.insert_roi_vertex(h->vertex());
-				auto n = h->vertex()->vertex_begin();
+				Halfedge_around_vertex_circulator hC = current1->vertex()->vertex_begin();
 				do
 				{
-					deform_mesh.insert_roi_vertex(n->opposite()->vertex());
+					Halfedge_handle hh = hC->opposite();
+					if(hh->is_border() && hh!= current1->opposite())
+					{	
+						previous1 = current1;
+						current1 = hh;
+					}
 				}
-				while(++n!=h->vertex()->vertex_begin());
-				deform_mesh.insert_control_vertex(h->vertex());
+				while( hC != current1->vertex()->vertex_begin());
+				
+				
+				///////// find the correspondence of current1 among the neighbors of 
+				Point3d neighcorres;
+				Halfedge_handle current2;
+				double distMin = std::numeric_limits<double>::max();
+				Halfedge_around_vertex_circulator hC2 = previous2->vertex()->vertex_begin();
+				do
+				{
+					Halfedge_handle hh2 = hC->opposite();
+					Point3d twCandidate = toWorld(v,q,hh2);
+					Point3d twNeigh = toWorld(v,p,current1);
+					double dist = CGAL::squared_distance(twNeigh,twCandidate);
+					if(dist < distMin)
+					{
+						distMin = dist;
+						neighcorres = twCandidate;
+						current2 = hh2;
+						corresHE[current1] = current2;
+						wcCorres[current1] = toWorld(v,q,current2);
+					}
+					
+				}
+				while( hC2 != previous2->vertex()->vertex_begin());
+				
+				part->split_edge(current1);
+				current1->next()->vertex()->point() = toPartFrame(v,p,wcCorres[current1]);
 			}
+			while( current1 != fHE );
 		}
-		
-		bool is_matrix_factorization_OK = deform_mesh.preprocess();
-		if(!is_matrix_factorization_OK)
-		{
-			std::cout << "preprocess fail" << std::endl;
-		}
-		
-		h = mesh->halfedges_begin();
-		for(;h!=mesh->halfedges_end();++h)
-		{
-			if(h->is_border())
-			{
-				deform_mesh.set_target_position(h->vertex(),corresp[h->vertex()]->point());
-			} 
-		}
-		//deform_mesh.set_iterations(10);
-		//deform_mesh.set_tolerance(0.0);
-		deform_mesh.deform();
-		m_parts[p] = convertToEnrichedPolyhedron(mesh);
-	}
+	}*/
 }
 
-/* Fuse the meshes
-	Look for border halfedge, find the closest vertex and fill the hole*/
-void SegmentController::fillHoles(Viewer* v, PolyhedronPtr p)
+void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr t,int sourceFrameID, int targetFrameID)
 {
-	Boolean_Operations_Component booleanOp(v,p);
-	for(unsigned m=0;m<m_parts.size();++m)
+	
+	s->keep_largest_connected_components(1);
+	t->keep_largest_connected_components(1);
+	unsigned sizeS = s->size_of_vertices();
+	unsigned sizeT = t->size_of_vertices();
+	colorMesh(s,1,1,0);
+	colorMesh(t,0,1,1);
+	
+	double* S = new double[3*sizeS];
+	double* T = new double[3*sizeT];
+	
+	auto sVertex = s->vertices_begin();
+	for(unsigned vS=0; vS < sizeS; ++vS,++sVertex)
 	{
-		booleanOp.Boolean_Union(p,m_parts[m],p);
+		Point3d wcp = toWorld(v,sourceFrameID,sVertex->point());
+		S[vS*3] = wcp.x();
+		S[vS*3+1] = wcp.y();
+		S[vS*3+2] = wcp.z();
+		++sVertex;
 	}
-	for(unsigned m=1;m<m_mainPart.size();++m)
+	
+	auto tVertex = t->vertices_begin();
+	for(unsigned vT=0; vT < sizeT; ++vT,++tVertex)
 	{
-		booleanOp.Boolean_Union(p,m_mainPart[m],p);
+		Point3d wcp = toWorld(v,targetFrameID,tVertex->point());
+		T[vT*3] = wcp.x();
+		T[vT*3+1] = wcp.y();
+		T[vT*3+2] = wcp.z();
+		++tVertex;
+	}
+	
+	//Initialization
+	Matrix R = Matrix::eye(3);
+	Matrix P(3,1);
+	IcpPointToPoint icp2(S,sizeS,3);
+	//IcpPointToPlane icp(S,sizeS,3);
+	//icp.fit(T,sizeT,R,P,-1);
+	icp2.fit(T,sizeT,R,P,-1);
+	
+	std::cout << endl << "Transformation results:" << endl;
+	std::cout << "R:" << endl << R << endl << endl;
+	std::cout << "t:" << endl << P << endl << endl;
+	
+	qglviewer::Quaternion Q;
+	double rData[3][3];
+	for(unsigned i=0;i<3;++i)
+	{
+		for(unsigned j=0;j<3;++j)
+		{
+			rData[i][j] = R.val[i][j];
+		}
+	}
+	Q.setFromRotationMatrix(rData);
+
+	v->frame(targetFrameID)->translate(P.val[0][0],P.val[1][0],P.val[2][0]);
+	v->frame(targetFrameID)->rotate(Q);
+	
+	v->update();
+	v->recreateListsAndUpdateGL();
+}
+
+void visitBorder(Halfedge_handle h, std::map<Halfedge_handle,bool> & isVisited, std::vector<Halfedge_handle> & border)
+{
+	Vertex_iterator hVertex = h->vertex();
+	
+	if(isVisited[h] || isVisited[h->opposite()])// halfedge has been visited
+	{
+		return;
+	}
+	else if ( h->is_border() )
+	{
+		border.push_back(h->opposite());
+		isVisited[h] = true;
+		isVisited[h->opposite()] = true;
+		Halfedge_around_vertex_circulator hNext = hVertex->vertex_begin();
+		
+		do
+		{
+			Halfedge_handle hNextOp = hNext->opposite();
+			visitBorder(hNextOp,isVisited,border);
+		}
+		while(++hNext!=hVertex->vertex_begin());
 	}
 }
 
@@ -291,7 +643,7 @@ void visitVertexSelection(Halfedge_around_vertex_circulator h, std::map<Vertex_i
 		{
 			visitVertexSelection(hNext,isSelected,cc,nbcc);
 		}
-		while(++hNext!=hVertex->vertex_begin());	
+		while(++hNext!=hVertex->vertex_begin());
 	}
 }
 
@@ -380,4 +732,30 @@ PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p)
 	sp->delegate(builder);
 	delete p;
 	return sp;
+}
+
+// Compute world coordinates using QGL operations, returns a CGAL::Point3d
+Point3d toWorld(Viewer * v, int p, Point3d lcp)
+{
+	Point3d wcp;
+	float x,y,z;
+	double a,b,c,w;
+	v->frame(p)->getPosition(x,y,z); qglviewer::Vec T(x,y,z);
+	v->frame(p)->getOrientation(a,b,c,w); qglviewer::Quaternion Q(a,b,c,w);
+	qglviewer::Vec V = Q * qglviewer::Vec(lcp.x(),lcp.y(),lcp.z()) + T;
+	wcp = Point3d(V[0],V[1],V[2]);
+	return wcp;
+}
+
+// Compute local coordinates for a point in world coordinate, in the frame #p
+Point3d toPartFrame(Viewer* v, int p, Point3d wcp)
+{
+	Point3d lcp;
+	float x,y,z;
+	double a,b,c,w;
+	v->frame(p)->getTranslation(x,y,z); qglviewer::Vec T(x,y,z);
+	v->frame(p)->getRotation(a,b,c,w); qglviewer::Quaternion Q(a,b,c,w);
+	qglviewer::Vec V = Q.inverseRotate(qglviewer::Vec(wcp.x(),wcp.y(),wcp.z()) - T);
+	lcp = CGAL::ORIGIN + Vector(V[0],V[1],V[2]);
+	return lcp;
 }

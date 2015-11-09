@@ -45,7 +45,6 @@ void mepp_component_Correspondence_plugin::post_draw()
 	}
 }
 
-
 void mepp_component_Correspondence_plugin::pre_draw()
 {
 	if (mw->activeMdiChild() != 0)
@@ -55,7 +54,6 @@ void mepp_component_Correspondence_plugin::pre_draw()
 		
 	}
 }
-
 
 void mepp_component_Correspondence_plugin::OnMouseLeftDown(QMouseEvent *event)
 {
@@ -143,6 +141,7 @@ void mepp_component_Correspondence_plugin::OnPainting()
 {
 	if(mw->activeMdiChild() != 0)
 	{
+		
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		for(Facet_iterator pFacet = polyhedron_ptr->facets_begin();pFacet!=polyhedron_ptr->facets_end();++pFacet)
@@ -150,10 +149,10 @@ void mepp_component_Correspondence_plugin::OnPainting()
 			m_facets.push_back(pFacet);
 		}
 		PaintStart(viewer);
+		
 	}
 	m_hasNotBeenPainted = true;
 }
-
 
 void mepp_component_Correspondence_plugin::OnCorrespondence()
 {
@@ -200,10 +199,10 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 				mw->statusBar()->showMessage(tr("Correspondence is done"));
 
 				component_ptr->set_init(2);
+				viewer->showAllScene();
 				viewer->recreateListsAndUpdateGL();
-				tic();
+				
 				compareToDataset(component_ptr,meshID);
-				toc();
 			}
 		}
 	}
@@ -302,8 +301,6 @@ void mepp_component_Correspondence_plugin::OnMahalanobis()
 	}
 	QApplication::restoreOverrideCursor();
 }
-
-
 
 void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 {	
@@ -640,7 +637,6 @@ void mepp_component_Correspondence_plugin::OnPrepareData()
 						
 						if(polyhedron_ptr->is_pure_triangle())	
 						{
-							
 							Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
 							
 							std::string meshIDString = files[i];
@@ -664,49 +660,91 @@ void mepp_component_Correspondence_plugin::OnPrepareData()
 }
 
 void mepp_component_Correspondence_plugin::OnCut()
-{
+{	
+	//////////////////////////////////////////////////////////////////////////////////////////
+	////
+	//// Main Viewer : cut the mesh, remove the main polyhedron, add the parts,
+	////			setVisible, color the selected ones (red)
+	////
+	//////////////////////////////////////////////////////////////////////////////////////////
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	
+	mainSegCtr.cutSegments(); // Cut the mesh
+	mainViewer->getScenePtr()->set_loadType(1); // activate Space mode
+	mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+	mainViewer->getScenePtr()->delete_polyhedron(0); // Remove the main polyhedron
+	for(unsigned p=0; p<mainSegCtr.m_parts.size();++p)
+	{
+		mainViewer->getScenePtr()->add_polyhedron(mainSegCtr.m_parts[p]);
+		mainViewer->getScenePtr()->setVisible(p,true);
+		colorMesh(mainSegCtr.m_parts[p],1,0,0);
+	}
+	for(unsigned p=0; p<mainSegCtr.m_mainPart.size();++p)
+	{
+		mainViewer->getScenePtr()->add_polyhedron(mainSegCtr.m_mainPart[p]);
+		mainViewer->getScenePtr()->setVisible(p+mainSegCtr.m_parts.size(),true);
+	}
+	mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+	mainViewer->showAllSceneForSpaceMode();
+	mainViewer->recreateListsAndUpdateGL();
+	
+	//////////////////////////////////////////////////////////////////////////////////////////
+	////
+	//// Secondary Viewers : cut the mesh, remove the main polyhedron, add the parts ,
+	////			setVisible, color the selected ones (green)
+	////
+	//////////////////////////////////////////////////////////////////////////////////////////
 	if(mw->activeMdiChild() !=0)
 	{
-		Viewer* viewer = (Viewer *)mw->activeMdiChild();
-		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-		int current = viewer->getScenePtr()->get_current_polyhedron();
-		
-		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
-		
-		SegmentController & segCtr = component_ptr->m_segCtr;
-		segCtr.cutSegments();
-		viewer->getScenePtr()->set_loadType(1); // activate Space mode
-		viewer->getScenePtr()->todoIfModeSpace(viewer,1.0);
-		
-		PolyhedronPtr mainMesh = viewer->getScenePtr()->get_polyhedron(current);
-		
-		for(unsigned p=0;p<segCtr.m_parts.size();++p)
-		{
-			viewer->addFrame();
-			viewer->getScenePtr()->add_polyhedron(segCtr.m_parts[p]);
+		Viewer* viewerI = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyI = viewerI->getScenePtr()->get_polyhedron();
+		Correspondence_ComponentPtr corresI = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyI);
+		int cMeshI = viewerI->getScenePtr()->get_current_polyhedron();
+		SegmentController & segCtrI = corresI->m_segCtr;
+		segCtrI.cutSegments(); // Cut the mesh
+		viewerI->getScenePtr()->set_loadType(1); // activate Space mode
+		viewerI->getScenePtr()->todoIfModeSpace(viewerI,0.0);
+		viewerI->getScenePtr()->delete_polyhedron(cMeshI); // Remove the main polyhedron
+		for(unsigned p=0; p<segCtrI.m_parts.size();++p)
+		{		
+			viewerI->getScenePtr()->add_polyhedron(segCtrI.m_parts[p]);
+			viewerI->getScenePtr()->setVisible(p,true);
+			colorMesh(segCtrI.m_parts[p],0,1,0);
 		}
-		for(unsigned p=0;p<segCtr.m_mainPart.size();++p)
+		for(unsigned p=0; p<segCtrI.m_mainPart.size();++p)
 		{
-			viewer->addFrame();
-			viewer->getScenePtr()->add_polyhedron(segCtr.m_mainPart[p]);
+			viewerI->getScenePtr()->add_polyhedron(segCtrI.m_mainPart[p]);
+			viewerI->getScenePtr()->setVisible(p+segCtrI.m_parts.size(),true);
 		}
-		
-		viewer->recreateListsAndUpdateGL();
+		viewerI->getScenePtr()->todoIfModeSpace(viewerI,0.0);
+		viewerI->showAllSceneForSpaceMode();
+		viewerI->recreateListsAndUpdateGL();
 	}
 }
 
 void mepp_component_Correspondence_plugin::OnGlue()
 {
-	if(mw->activeMdiChild() != 0)
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+	int cMesh = mainViewer->getScenePtr()->get_current_polyhedron();
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	
+	mainSegCtr.glueSegments(mainViewer);
+	
+	mainViewer->recreateListsAndUpdateGL();
+	
+	/*if(mw->activeMdiChild() != 0)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		
-		component_ptr->m_segCtr.fillHoles(viewer,component_ptr->m_segCtr.m_mainPart[0]);
-		
-		/*component_ptr->m_segCtr.glueSegments();
+		component_ptr->m_segCtr.glueSegments();
 		for(unsigned p=0;p<component_ptr->m_segCtr.m_parts.size();++p)
 		{
 			viewer->addFrame();
@@ -716,30 +754,63 @@ void mepp_component_Correspondence_plugin::OnGlue()
 		{
 			viewer->addFrame();
 			viewer->getScenePtr()->add_polyhedron(component_ptr->m_segCtr.m_mainPart[p]);
-		}*/
+		}
 		viewer->recreateListsAndUpdateGL();
-	}
+	}*/
 }
 
+void mepp_component_Correspondence_plugin::OnUnion()
+{
+	//////////////////////////////////////////////////////////////
+	///
+	///	Get the Main viewer and fusion all the parts in it
+	///
+	//////////////////////////////////////////////////////////////
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+	int cMesh = mainViewer->getScenePtr()->get_current_polyhedron();
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	
+	mainSegCtr.joinSegments(mainViewer);
+}
 
 void mepp_component_Correspondence_plugin::OnAddSegment()
 {
-	// This is the first window, main viewer
+	//////////////////////////////////////////////////////////////////////////////////////////
+	////
+	//// Main Viewer : the first one to be open, just init everything
+	////
+	//////////////////////////////////////////////////////////////////////////////////////////
 	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
-	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
-		
-	Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
-	// Select the segment in the active window
+	int currentMainViewer = mainViewer->getScenePtr()->get_current_polyhedron();
+	PolyhedronPtr mainPolyhedron = mainViewer->getScenePtr()->get_polyhedron(); // This is the polyhedron to be replaced
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPolyhedron);
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	
+	//////////////////////////////////////////////////////////////////////////////////////////
+	//// 
+	//// Add the selected part in the active viewer to _mainViewer_
+	////
+	//////////////////////////////////////////////////////////////////////////////////////////
 	if(mw->activeMdiChild() !=0)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
-		int pID = viewer->getScenePtr()->get_current_polyhedron();
-		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron(pID);
-		mainViewer->getScenePtr()->set_loadType(1); // active Space mode
-		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,1.0);
-		mainViewer->getScenePtr()->add_polyhedron(polyhedron_ptr);
-		mainViewer->recreateListsAndUpdateGL();
-		component_ptr->m_segCtr.m_parts.push_back(polyhedron_ptr);
+		int currentSecondaryViewer = viewer->getScenePtr()->get_current_polyhedron();
+		PolyhedronPtr secondaryPolyhedron = viewer->getScenePtr()->get_polyhedron(); // This is the polyhedron that will replace _mainPolyhedron_
+		
+		Correspondence_ComponentPtr corres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer,secondaryPolyhedron);
+		SegmentController & segCtr = corres->m_segCtr;
+		
+		mainViewer->getScenePtr()->add_polyhedron(secondaryPolyhedron);
+		mainSegCtr.m_parts.push_back(secondaryPolyhedron);
+		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+		
+		mainSegCtr.alignSegments(mainViewer,mainPolyhedron,secondaryPolyhedron,currentMainViewer,mainViewer->get_nb_frames()-1);
+		
+		mainViewer->getScenePtr()->add_polyhedron(secondaryPolyhedron);
+		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+		mainViewer->recreateListsAndUpdateGL();	
 	}
 }
 
@@ -827,10 +898,6 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 		}
 	}
 }
-
-
-
-
 
 #if QT_VERSION < 0x050000
 Q_EXPORT_PLUGIN2(mepp_component_Correspondence_plugin, mepp_component_Correspondence_plugin);

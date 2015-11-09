@@ -49,6 +49,8 @@ class mepp_component_Correspondence_plugin :
 			delete actionCompare;
 			delete actionLearn;
 			delete actionPrepareData;
+			delete actionGlue;
+			delete actionUnion;
 		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
@@ -118,6 +120,11 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionGlue, SIGNAL(triggered()),this, SLOT(OnGlue()));
 			}
+			actionUnion = new QAction(tr("Union"),this);
+			if( actionUnion ) 
+			{
+				connect(actionUnion, SIGNAL(triggered()),this, SLOT(OnUnion()));
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -138,7 +145,8 @@ class mepp_component_Correspondence_plugin :
 				<< NULL // menu separator
 				<< actionLearn
 				<< NULL // menu separator
-				<< actionPrepareData;
+				<< actionPrepareData
+				<< actionUnion;
 		}
 
 		virtual void pre_draw();
@@ -178,6 +186,7 @@ class mepp_component_Correspondence_plugin :
 		void OnCut();
 		void OnAddSegment();
 		void OnGlue();
+		void OnUnion();
 		
   private:
     int m_currentLabel;
@@ -192,6 +201,7 @@ class mepp_component_Correspondence_plugin :
     QAction *actionCut;
     QAction *actionAddSegment;
     QAction *actionGlue;
+    QAction *actionUnion;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };

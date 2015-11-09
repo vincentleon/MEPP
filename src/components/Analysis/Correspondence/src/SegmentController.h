@@ -7,6 +7,9 @@
 #include <CGAL/Polyhedron_items_with_id_3.h>
 #include "Correspondence_Polyhedron.h"
 
+#include "libicp/icpPointToPlane.h"
+#include "libicp/icpPointToPoint.h"
+
 #define CGAL_EIGEN3_ENABLED
 #include "CGAL/Surface_mesh_deformation.h"
 #include <set>
@@ -15,6 +18,7 @@ typedef CGAL::Simple_cartesian<double>	simpleKernel;
 typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;
 typedef CGAL::Surface_mesh_deformation<simplePolyhedron> surface_mesh_deformation;
 
+typedef std::vector<Vertex_handle> border;
 
 class SegmentController
 {
@@ -25,20 +29,28 @@ public:
 	
 	void cutSegments();
 	
-	void glueSegments();
+	void glueSegments(Viewer * v);
 	
-	void fillHoles(Viewer * v, PolyhedronPtr p);
+	//void sewSegments(Viewer * v);
+	
+	void joinSegments(Viewer * v);
 	
 	void addMainPart( PolyhedronPtr p);
 	
 	void addSegement( PolyhedronPtr p);
 	
+	void alignSegments( Viewer *v, PolyhedronPtr s, PolyhedronPtr t, int sourceFrameID, int targetFrameID);
+	
 	std::vector<PolyhedronPtr> m_mainPart;
 	std::vector<PolyhedronPtr> m_parts;
+	
+	std::vector<std::vector<std::vector<Halfedge_handle> > > m_partsBorders;
 	
 private:
 	
 	PolyhedronPtr m_polyhedron;
+	
+	
 };
 
 template<class HDS>
@@ -85,11 +97,16 @@ void visitVertexSelection(Halfedge_around_vertex_circulator h,
 			  std::map<Vertex_iterator,bool> & isSelected, 
 			  std::map<Vertex_iterator,int> & cc, int nbcc);
  
+void visitBorder(Halfedge_handle h, std::map<Halfedge_handle,bool> & isVisited, std::vector<Halfedge_handle> & border);
+
 bool isColoredBlack(Vertex_handle v);
 
 void colorMesh(PolyhedronPtr p, float r, float g, float b);
 
 void copyDescriptor(PolyhedronPtr s, PolyhedronPtr d);
+
+Point3d toWorld(Viewer * v, int p, Point3d lcp);
+Point3d toPartFrame(Viewer * v, int p, Point3d wcp);
 
 simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p);
 PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p);

@@ -448,8 +448,6 @@ void Correspondence_Component::compareDescriptorToSVM(PolyhedronPtr p)
 	}
 }
 
-
-
 Vertex_handle Correspondence_Component::getSelectionCenter()
 {
 	double scoreMin = std::numeric_limits<double>::max();
@@ -504,7 +502,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		Vertex_handle v = m_selection[i];
 		m_tag[v] = 1;
 		q.push_back(v);
-		v->color(0,1,0);
+		//v->color(0,1,0);
 	}
 	while(!q.empty())
 	{
@@ -527,7 +525,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		while(++he!=s->vertex_begin());
 	}
 
-	for(unsigned i=0; i<m_selection.size();++i)
+	/*for(unsigned i=0; i<m_selection.size();++i)
 	{
 		Vertex_handle v = m_selection[i];
 		if( m_tag[v] == 2 )
@@ -538,7 +536,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		{
 			v->color(0,1,1);
 		}
-	}
+	}*/
 }
 
 void Correspondence_Component::readSelectionBasedOnColor(PolyhedronPtr p)
@@ -584,7 +582,7 @@ void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 	
 	std::vector<double> lBounds(dim,0.0);
 	opt.set_lower_bounds(lBounds);
-	opt.set_xtol_rel(1e-5);
+	opt.set_xtol_rel(1e-3);
 	double minf;
 	
 	nlopt::result res = opt.optimize(ell,minf);
