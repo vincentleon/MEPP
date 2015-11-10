@@ -94,7 +94,7 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 		unsigned index = (color[0] << 16) | (color[1] << 8) | color[2];
 		if(index ==  0xFFFFFF){index = -1;}
 		else{
-			Facet_iterator pFacet = m_facets[index];
+				Facet_iterator pFacet = m_facets[index];
 			Halfedge_around_facet_circulator hE = pFacet->facet_begin();
 			do{
 				Vertex_handle pVertex = hE->opposite()->vertex();
@@ -773,6 +773,7 @@ void mepp_component_Correspondence_plugin::OnUnion()
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
 	
 	mainSegCtr.joinSegments(mainViewer);
+	mainViewer->recreateListsAndUpdateGL();
 }
 
 void mepp_component_Correspondence_plugin::OnAddSegment()
@@ -808,8 +809,8 @@ void mepp_component_Correspondence_plugin::OnAddSegment()
 		
 		mainSegCtr.alignSegments(mainViewer,mainPolyhedron,secondaryPolyhedron,currentMainViewer,mainViewer->get_nb_frames()-1);
 		
-		mainViewer->getScenePtr()->add_polyhedron(secondaryPolyhedron);
-		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+		/*mainViewer->getScenePtr()->add_polyhedron(secondaryPolyhedron);
+		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);*/
 		mainViewer->recreateListsAndUpdateGL();	
 	}
 }

@@ -2,16 +2,18 @@
 #include <set>
 
 
-#include <CGAL/Polyhedron_items_with_id_3.h>
-#include <../../src/components/Tools/Boolean_Operations/src/Boolean_Operations_Component.h>
+//#include <CGAL/Polyhedron_items_with_id_3.h>
+
 #include <viewer.hxx>
 #include <Polyhedron/polyhedron.h>
 #include <QGLViewer/vec.h>
 #include <QGLViewer/quaternion.h>
 #include <boost/graph/graph_concepts.hpp>
 
+/*typedef CGAL::Simple_cartesian<double>	simpleKernel;
+typedef CGAL::Exact_predicates_inexact_constructions_kernel exactK;
+typedef Polyhedron_3<exactK> exactPolyhedron;*/
 
-typedef boost::shared_ptr<Boolean_Operations_Component> Boolean_Operations_ComponentPtr;
 
 SegmentController::SegmentController(PolyhedronPtr p) : m_polyhedron(p)
 {}
@@ -173,29 +175,73 @@ void SegmentController::cutSegments()
 	}
 }
 
+PolyhedronPtr SegmentController::fillHoles(PolyhedronPtr p)
+{
+	p->keep_largest_connected_components(1);
+	std::cout << "p vertices : " << p->size_of_vertices() << std::endl;
+	simplePolyhedron  * poly = convertToSimplePolyhedron(p);
+	std::cout << "poly vertices : " << poly->size_of_vertices() << std::endl;
+	
+	
+	unsigned nb_holes = 0;
+	for(auto h = poly->halfedges_begin(); h!=poly->halfedges_end(); ++h)
+	{
+		if(h->is_border())
+		{
+		std::vector<simplePolyhedron::Facet_handle> patch_facets;
+		std::vector<simplePolyhedron::Vertex_handle> patch_vertices;
+		bool success = CGAL::cpp11::get<0>(
+			CGAL::Polygon_mesh_processing::triangulate_refine_and_fair_hole(
+			*poly,
+			h,
+			std::back_inserter(patch_facets),
+			std::back_inserter(patch_vertices),
+			CGAL::Polygon_mesh_processing::parameters::vertex_point_map(get(CGAL::vertex_point,*poly)).geom_traits(simpleKernel())));
+			/*std::cout << " Number of facets in constructed patch: " << patch_facets.size() << std::endl;
+			std::cout << " Number of vertices in constructed patch: " << patch_vertices.size() << std::endl;
+			std::cout << " Fairing : " << (success ? "succeeded" : "failed") << std::endl;*/
+			++nb_holes;
+		}
+	}
+	std::cout << std::endl;
+	//std::cout << nb_holes << " holes have been filled" << std::endl;
+
+	std::cout << "poly vertices : " << poly->size_of_vertices() << std::endl;
+	PolyhedronPtr r = convertToEnrichedPolyhedron(poly);
+	std::cout << "p vertices : " << r->size_of_vertices() << std::endl;
+	std::cout << std::endl;
+	return r;
+}
+
+
 void SegmentController::joinSegments(Viewer * v)
 {
 	std::vector<double> coords;
 	std::vector<int> tris;
 	
-	/*for(unsigned partID = 0; partID < (m_parts.size() + m_mainPart.size()) ;++partID)
+	std::vector<PolyhedronPtr> newMeshes;
+	for(unsigned partID = 0; partID < v->getScenePtr()->get_nb_polyhedrons(); ++partID)
 	{
-		int offset = coords.size() / 3;
-		PolyhedronPtr p;
-		if(partID >= m_parts.size())
-		{
-			p = m_mainPart[partID-m_parts.size()];
-		}
-		else
-		{
-			p = m_parts[partID];
-		}*/
-	for(unsigned partID =0; partID <  v->getScenePtr()->get_nb_polyhedrons(); ++partID)
+		PolyhedronPtr p = v->getScenePtr()->get_polyhedron(partID);
+		p->set_index_vertices();
+ 		PolyhedronPtr n = fillHoles(p);
+		n->compute_normals();
+		newMeshes.push_back(n);
+	}
+	
+	for(unsigned nm = 0; nm<newMeshes.size();++nm)
+	{
+	v->getScenePtr()->add_polyhedron(newMeshes[nm]);	
+	}
+	v->getScenePtr()->todoIfModeSpace(v,0.0);
+	v->recreateListsAndUpdateGL();
+	/*for(unsigned partID =0; partID <  v->getScenePtr()->get_nb_polyhedrons(); ++partID)
  	{	
 		int offset = coords.size() / 3;
 		PolyhedronPtr p = v->getScenePtr()->get_polyhedron(partID);
 		p->set_index_vertices();
-		
+		fillHoles(p);
+		p->set_index_vertices();
 		for(auto pVertex = p->vertices_begin();
 		pVertex != p->vertices_end();++pVertex)
 		{
@@ -225,8 +271,9 @@ void SegmentController::joinSegments(Viewer * v)
 	v->getScenePtr()->add_polyhedron(sp);
 	sp->compute_normals();
 	sp->calc_nb_components();
-	sp->calc_nb_boundaries();
+	sp->calc_nb_boundaries();*/
 	
+	//fillHoles(sp);
 	/*
 	 * Then extract all borders
 	 * Then, contour following correspondence (~todo)
@@ -376,7 +423,7 @@ void SegmentController::joinSegments(Viewer * v)
 		cBord2[b]->vertex()->point() = mem;
 		
 	}*/
-	sp->compute_normals();
+	//sp->compute_normals();
 	
 	/////////////////////////////////////////////////////////
 	/// Non rigid deformation
@@ -616,7 +663,7 @@ void visitBorder(Halfedge_handle h, std::map<Halfedge_handle,bool> & isVisited, 
 
 void visitVertexSelection(Halfedge_around_vertex_circulator h, std::map<Vertex_iterator,bool> & isSelected,
 			  std::map<Vertex_iterator,int> & cc, int nbcc)
-    {
+{
 	Vertex_iterator hVertex = h->opposite()->vertex();
 	
 	if(cc[hVertex] != 0)// neighbour has been visited
@@ -706,6 +753,8 @@ simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p)
 
 PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p)
 {
+	unsigned m = 0;
+	
 	std::vector<double> coords;
 	for(auto pVertex = p->vertices_begin();
 	    pVertex != p->vertices_end();++pVertex)
@@ -713,6 +762,8 @@ PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p)
 		coords.push_back(pVertex->point().x());
 		coords.push_back(pVertex->point().y());
 		coords.push_back(pVertex->point().z());
+		pVertex->id() = m;
+		++m;
 	}// collect all vertices for builder
 	
 	std::vector<int> tris;
@@ -730,7 +781,7 @@ PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p)
 	PolyhedronPtr sp(new Polyhedron);
 	polyhedron_builder<HalfedgeDS> builder(coords,tris);
 	sp->delegate(builder);
-	delete p;
+	//delete p;
 	return sp;
 }
 

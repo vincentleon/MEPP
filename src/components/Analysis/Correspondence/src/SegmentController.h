@@ -7,16 +7,22 @@
 #include <CGAL/Polyhedron_items_with_id_3.h>
 #include "Correspondence_Polyhedron.h"
 
-#include "libicp/icpPointToPlane.h"
 #include "libicp/icpPointToPoint.h"
 
-#define CGAL_EIGEN3_ENABLED
-#include "CGAL/Surface_mesh_deformation.h"
 #include <set>
 
-typedef CGAL::Simple_cartesian<double>	simpleKernel;
+#define CGAL_EIGEN3_ENABLED
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Polygon_mesh_processing/triangulate_hole.h>
+
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel simpleKernel;
 typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;
-typedef CGAL::Surface_mesh_deformation<simplePolyhedron> surface_mesh_deformation;
+
+
+/*typedef CGAL::Simple_cartesian<double>	simpleKernel;
+typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;*/
+//typedef CGAL::Surface_mesh_deformation<simplePolyhedron> surface_mesh_deformation;
 
 typedef std::vector<Vertex_handle> border;
 
@@ -36,6 +42,8 @@ public:
 	void joinSegments(Viewer * v);
 	
 	void addMainPart( PolyhedronPtr p);
+	
+	PolyhedronPtr fillHoles( PolyhedronPtr p);
 	
 	void addSegement( PolyhedronPtr p);
 	
