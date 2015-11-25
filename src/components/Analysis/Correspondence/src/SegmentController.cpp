@@ -1,19 +1,11 @@
 #include "SegmentController.h"
 #include <set>
 
-
-//#include <CGAL/Polyhedron_items_with_id_3.h>
-
 #include <viewer.hxx>
 #include <Polyhedron/polyhedron.h>
 #include <QGLViewer/vec.h>
 #include <QGLViewer/quaternion.h>
 #include <boost/graph/graph_concepts.hpp>
-
-/*typedef CGAL::Simple_cartesian<double>	simpleKernel;
-typedef CGAL::Exact_predicates_inexact_constructions_kernel exactK;
-typedef Polyhedron_3<exactK> exactPolyhedron;*/
-
 
 SegmentController::SegmentController(PolyhedronPtr p) : m_polyhedron(p)
 {}
@@ -178,10 +170,7 @@ void SegmentController::cutSegments()
 PolyhedronPtr SegmentController::fillHoles(PolyhedronPtr p)
 {
 	p->keep_largest_connected_components(1);
-	std::cout << "p vertices : " << p->size_of_vertices() << std::endl;
 	simplePolyhedron  * poly = convertToSimplePolyhedron(p);
-	std::cout << "poly vertices : " << poly->size_of_vertices() << std::endl;
-	
 	
 	unsigned nb_holes = 0;
 	for(auto h = poly->halfedges_begin(); h!=poly->halfedges_end(); ++h)
@@ -197,20 +186,43 @@ PolyhedronPtr SegmentController::fillHoles(PolyhedronPtr p)
 			std::back_inserter(patch_facets),
 			std::back_inserter(patch_vertices),
 			CGAL::Polygon_mesh_processing::parameters::vertex_point_map(get(CGAL::vertex_point,*poly)).geom_traits(simpleKernel())));
-			/*std::cout << " Number of facets in constructed patch: " << patch_facets.size() << std::endl;
-			std::cout << " Number of vertices in constructed patch: " << patch_vertices.size() << std::endl;
-			std::cout << " Fairing : " << (success ? "succeeded" : "failed") << std::endl;*/
+			
 			++nb_holes;
 		}
 	}
-	std::cout << std::endl;
-	//std::cout << nb_holes << " holes have been filled" << std::endl;
-
-	std::cout << "poly vertices : " << poly->size_of_vertices() << std::endl;
 	PolyhedronPtr r = convertToEnrichedPolyhedron(poly);
-	std::cout << "p vertices : " << r->size_of_vertices() << std::endl;
-	std::cout << std::endl;
 	return r;
+}
+
+void SegmentController::unionSegments(Viewer* v)
+{
+	float x, y, z;
+	double a, b, c, w;
+	ScenePtr S = v->getScenePtr();
+	
+	//Put everything in world coordinates
+	for(unsigned i=0; i<v->getScenePtr()->get_nb_polyhedrons();i++)
+	{
+		Vertex_iterator pVertex = NULL;
+		PolyhedronPtr P = S->get_polyhedron(i);
+		
+		v->frame(i)->getPosition(x,y,z);
+		v->frame(i)->getOrientation(a,b,c,w);
+		qglviewer::Vec T(x,y,z);
+		qglviewer::Quaternion Q(a,b,c,w);
+		
+		for(pVertex = P->vertices_begin(); pVertex != P->vertices_end();++pVertex)
+		{
+			qglviewer::Vec V = Q * qglviewer::Vec(pVertex->point().x(),
+							      pVertex->point().y(),
+							      pVertex->point().z()) + T;
+			pVertex->point() = CGAL::ORIGIN + Vector(V[0],V[1],V[2]);
+		}
+		v->frame(i)->setPosition(0,0,0);
+		v->frame(i)->setOrientation(0,0,0,1);
+	}
+	v->show();
+	v->recreateListsAndUpdateGL();
 }
 
 
@@ -220,6 +232,11 @@ void SegmentController::joinSegments(Viewer * v)
 	std::vector<int> tris;
 	
 	std::vector<PolyhedronPtr> newMeshes;
+	std::vector<qglviewer::Quaternion> Orientation;
+	std::vector<qglviewer::Vec> Position;
+	
+	this->unionSegments(v);
+	
 	for(unsigned partID = 0; partID < v->getScenePtr()->get_nb_polyhedrons(); ++partID)
 	{
 		PolyhedronPtr p = v->getScenePtr()->get_polyhedron(partID);
@@ -227,16 +244,33 @@ void SegmentController::joinSegments(Viewer * v)
  		PolyhedronPtr n = fillHoles(p);
 		n->compute_normals();
 		newMeshes.push_back(n);
+		
+		/*v->frame(partID)->getOrientation(a,b,c,w); qglviewer::Quaternion Q(a,b,c,w);
+		v->frame(partID)->getPosition(x,y,z); qglviewer::Vec P(x,y,z);*/
+		
+		/*Orientation.push_back(Q);
+		Position.push_back(P);*/
+		
 	}
+	for(unsigned partID = 0; partID < v->getScenePtr()->get_nb_polyhedrons(); ++partID)
+	{
+		v->getScenePtr()->delete_polyhedron(partID);
+	}
+	
 	
 	for(unsigned nm = 0; nm<newMeshes.size();++nm)
 	{
-	v->getScenePtr()->add_polyhedron(newMeshes[nm]);	
+		v->getScenePtr()->add_polyhedron(newMeshes[nm]);
+		//v->addFrame();
+		//v->frame(v->get_nb_frames()-1)->rotate(Orientation[nm]);
+		//v->frame(v->get_nb_frames()-1)->translate(Position[nm]);
+		v->getScenePtr()->setVisible(nm,true);
 	}
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();
+	
 	/*for(unsigned partID =0; partID <  v->getScenePtr()->get_nb_polyhedrons(); ++partID)
- 	{	
+	{	
 		int offset = coords.size() / 3;
 		PolyhedronPtr p = v->getScenePtr()->get_polyhedron(partID);
 		p->set_index_vertices();
@@ -576,6 +610,8 @@ void SegmentController::glueSegments(Viewer * v)
 
 void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr t,int sourceFrameID, int targetFrameID)
 {
+	fillHoles(s);
+	fillHoles(t);
 	
 	s->keep_largest_connected_components(1);
 	t->keep_largest_connected_components(1);

@@ -15,14 +15,12 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Polygon_mesh_processing/triangulate_hole.h>
 
+#include "../components/Tools/Boolean_Operations/src/Boolean_Operations_Component.h"
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel simpleKernel;
 typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;
 
-
-/*typedef CGAL::Simple_cartesian<double>	simpleKernel;
-typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;*/
-//typedef CGAL::Surface_mesh_deformation<simplePolyhedron> surface_mesh_deformation;
+typedef boost::shared_ptr<Boolean_Operations_Component> Boolean_Operations_ComponentPtr;
 
 typedef std::vector<Vertex_handle> border;
 
@@ -41,6 +39,8 @@ public:
 	
 	void joinSegments(Viewer * v);
 	
+	void unionSegments(Viewer * v);
+	
 	void addMainPart( PolyhedronPtr p);
 	
 	PolyhedronPtr fillHoles( PolyhedronPtr p);
@@ -57,7 +57,6 @@ public:
 private:
 	
 	PolyhedronPtr m_polyhedron;
-	
 	
 };
 

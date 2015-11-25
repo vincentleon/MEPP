@@ -594,7 +594,7 @@ void mepp_component_Correspondence_plugin::OnPrepareData()
 	DIR *dp;
 	struct dirent *dirp;
 	
-	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory"),"/home/leon/");
+	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory"),"/home/leon/");	
 	std::string dir = path.toStdString();
 	
 	// read all files in directory
@@ -616,7 +616,7 @@ void mepp_component_Correspondence_plugin::OnPrepareData()
 		
 		if(!isHidden)
 		{
-			bool isPLY = (files[i].substr(len-3)=="ply");
+			bool isPLY = (files[i].substr(len-3)=="obj");
 			if(isPLY)
 			{
 				emit(mw->get_actionNewEmpty()->trigger());
@@ -773,7 +773,10 @@ void mepp_component_Correspondence_plugin::OnUnion()
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
 	
 	mainSegCtr.joinSegments(mainViewer);
+	//mainSegCtr.unionSegments(mainViewer);
 	mainViewer->recreateListsAndUpdateGL();
+	
+	
 }
 
 void mepp_component_Correspondence_plugin::OnAddSegment()
@@ -833,7 +836,7 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 			int nbLabel = 4;
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
-			unsigned posE = meshIDString.find_last_of(".off");
+			unsigned posE = meshIDString.find_last_of(".ply");
 			
 			meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 

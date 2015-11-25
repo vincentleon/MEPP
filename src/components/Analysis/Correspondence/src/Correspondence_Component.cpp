@@ -298,9 +298,14 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 
 void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 {
+	std::cout << "Compare Descriptor to Ellipse : " << p->pName << std::endl;
 	std::vector<double> centreDescr = m_centreDescriptor;
 	//normalize(centreDescr);
-
+	myVector mu = myVector(centreDescr.size());
+	myVector sig = myVector(centreDescr.size());
+	
+	unsigned resSize = 0;
+	
 	for(Vertex_iterator pVertex = p->vertices_begin();
 		    pVertex!=p->vertices_end();++pVertex)
 	{
@@ -314,13 +319,54 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		}
 		if(eqEll<=1)
 		{
+			++resSize;
 			pVertex->color(0,0,0);
+			std::vector<double > & descr = pVertex->getSemantic();
+			for(unsigned l=0;l<descr.size();++l)
+			{
+				mu[l]+=descr[l];
+			}
 		}
 		else
 		{
 			pVertex->color(0.5,0.5,0.5);
 		}
 	}
+	mu = (1.0/resSize)*mu;
+	
+	for(Vertex_iterator pVertex = p->vertices_begin();
+		    pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> localDescr = pVertex->getSemantic();
+		//normalize(localDescr);
+		double eqEll = 0.0;
+		for(unsigned l=0;l<localDescr.size();++l)
+		{
+			double diff = localDescr[l]- centreDescr[l];
+			eqEll += (diff*diff/(m_ellipse[l]*m_ellipse[l]));
+		}
+		if(eqEll<=1)
+		{
+			++resSize;
+			
+			std::vector<double > & descr = pVertex->getSemantic();
+			for(unsigned l=0;l<descr.size();++l)
+			{
+				double diff = descr[l]-mu[l];
+				sig[l]+= diff*diff;
+			}
+		}
+	}
+	sig = (1.0/resSize)*sig;
+	for(unsigned l=0;l<sig.dimension();++l)
+	{
+		sig[l] = sqrt(sig[l]);
+	}
+	
+	
+	std::cout << "mean : " << mu << std::endl;
+	std::cout << "stdv " << sig << std::endl;
+	
 }
 
 void Correspondence_Component::compareDescriptorToEllipseRotation(PolyhedronPtr p)
@@ -568,6 +614,43 @@ void Correspondence_Component::initializeEllipsoid(PolyhedronPtr p)
 
 void Correspondence_Component::computeEllipseParameters(PolyhedronPtr p)
 {
+	std::vector<double> & descr = m_selection[0]->getSemantic();
+	
+	myVector mu = myVector(descr.size());
+	myVector sig = myVector(descr.size());
+	
+	for(unsigned l=0;l<descr.size();++l)
+	{
+		mu[l] = descr[l];
+ 	}
+	
+	for(unsigned s=1;s<m_selection.size();++s)
+	{
+		descr = m_selection[s]->getSemantic();
+		for(unsigned l=0;l<descr.size();++l)
+		{
+			mu[l]+=descr[l];
+		}
+	}
+	mu = (1.0/m_selection.size())*mu;
+	
+	for(unsigned s=0;s<m_selection.size();++s)
+	{
+		descr = m_selection[s]->getSemantic();
+		for(unsigned l=0;l<descr.size();++l)
+		{
+			double diff = descr[l] - mu[l];
+			sig[l] += diff*diff;
+		}
+	}
+	sig = (1.0/m_selection.size())*sig;
+	for(unsigned l=0;l<sig.dimension();++l)
+	{
+		sig[l] = sqrt(sig[l]);
+	}
+	std::cout << mu << std::endl;
+	std::cout << sig << std::endl;
+	
 	m_ellipse = std::vector<double>(m_nbLabel,m_isolineValue);
 	
 	std::vector<double> ell = m_ellipse;

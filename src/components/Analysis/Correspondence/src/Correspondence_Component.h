@@ -16,7 +16,7 @@
 #include "geodesic/geodesic_algorithm_exact.h"
 
 #include <vector>
-
+	
 #include <nlopt.hpp>
 
 #include "CGAL/Linear_algebraCd.h"
