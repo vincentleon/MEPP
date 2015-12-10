@@ -156,15 +156,20 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDi
 
 void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
 {
-	initMaxVector(p);
+	//initMaxVector(p);
 	for(Vertex_iterator pVertex = p->vertices_begin();
 	    pVertex!=p->vertices_end();++pVertex)
 	{
-		
-		std::vector<double> localDescr = pVertex->getSemantic();
-		this->normalize(localDescr);
-		localDescr[dim] /= m_maxVector[dim];
-		pVertex->color(localDescr[dim],0.5,1.0-localDescr[dim]);
+		if(pVertex->getSemantic().size() == 0)
+		{
+			pVertex->color(0,0,0);
+		}
+		else{
+			std::vector<double> localDescr = pVertex->getSemantic();
+			//this->normalize(localDescr);
+			//localDescr[dim] /= m_maxVector[dim];
+			pVertex->color(localDescr[dim],0.5,1.0-localDescr[dim]);
+		}
 	}
 }
 
@@ -178,7 +183,11 @@ void Correspondence_Component::initMaxVector(PolyhedronPtr p)
 		for(Vertex_iterator pVertex = p->vertices_begin();
 		pVertex!=p->vertices_end();
 		++pVertex)
-		{
+		{ 
+			if(pVertex->getSemantic().size() == 0)
+			{
+				continue;
+			}
 			double val = pVertex->getSemantic()[l];
 			if(val>maxV && val!=std::numeric_limits<double>::infinity()){maxV = val;}
 		}
@@ -1150,7 +1159,7 @@ void Correspondence_Component::scaleMesh(Polyhedron::Iso_cuboid bbox, Polyhedron
 }
 
 //// NON-MEMBER FUNCTIONS
-double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
+/*double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
 {
 	double dist = 0.0;
 	for(unsigned el = 0; el<descr1.size(); ++el)
@@ -1161,7 +1170,7 @@ double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
 		dist += diff*diff;
 	}
 	return sqrt(dist);
-}
+}*/
 
 double objectiveFun(const std::vector<double> & ellipse, std::vector<double> & grad, void *data)
 {

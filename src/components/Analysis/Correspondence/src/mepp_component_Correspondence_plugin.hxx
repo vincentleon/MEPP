@@ -125,6 +125,16 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionUnion, SIGNAL(triggered()),this, SLOT(OnUnion()));
 			}
+			actionSelBorder = new QAction(tr("SelectionBorder"),this);
+			if( actionSelBorder )
+			{
+				connect(actionSelBorder, SIGNAL(triggered()),this, SLOT(OnSelectionBorder()));
+			}
+			actionMoveBorder = new QAction(tr("MoveBorder"),this);
+			if( actionMoveBorder )
+			{
+				connect(actionMoveBorder, SIGNAL(triggered()),this,SLOT(OnMoveBorder()));
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -146,7 +156,9 @@ class mepp_component_Correspondence_plugin :
 				<< actionLearn
 				<< NULL // menu separator
 				<< actionPrepareData
-				<< actionUnion;
+				<< actionUnion
+				<< actionSelBorder
+				<< actionMoveBorder;
 		}
 
 		virtual void pre_draw();
@@ -187,6 +199,8 @@ class mepp_component_Correspondence_plugin :
 		void OnAddSegment();
 		void OnGlue();
 		void OnUnion();
+		void OnSelectionBorder();
+		void OnMoveBorder();
 		
   private:
     int m_currentLabel;
@@ -202,6 +216,8 @@ class mepp_component_Correspondence_plugin :
     QAction *actionAddSegment;
     QAction *actionGlue;
     QAction *actionUnion;
+    QAction *actionSelBorder;
+    QAction *actionMoveBorder;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };

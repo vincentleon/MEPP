@@ -116,22 +116,24 @@ void mepp_component_Correspondence_plugin::showDescriptor()
 		viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
 		if(!viewerI->getScenePtr()->get_polyhedron()->empty())
 		{
-			PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
-	
-			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
+			for(unsigned j =0 ; j<viewerI->getScenePtr()->get_nb_polyhedrons();++j)
+			{
+				PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron(j);
+				Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
 			
-			
-			std::string meshIDString = polyhedron_ptr->pName;
-			unsigned posB = meshIDString.find_last_of("/");
-			unsigned posE = meshIDString.find_last_of(".ply");
+				/*
+				std::string meshIDString = polyhedron_ptr->pName;
+				unsigned posB = meshIDString.find_last_of("/");
+				unsigned posE = meshIDString.find_last_of(".ply");
+					
+				int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 				
-			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
-			
-			component_ptr->initParameters(nbLabel,meshID,meshIDString.substr(0,posB));
-						
-			component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));
-			component_ptr->showDescriptor(polyhedron_ptr,m_currentLabel);
-			viewerI->recreateListsAndUpdateGL();
+				component_ptr->initParameters(nbLabel,meshID,meshIDString.substr(0,posB));
+							
+				component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));*/
+				component_ptr->showDescriptor(polyhedron_ptr,m_currentLabel);
+				viewerI->recreateListsAndUpdateGL();
+			}
 		}
 	}
 	m_currentLabel = (m_currentLabel + 1) % nbLabel;
@@ -192,7 +194,10 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 				
 				component_ptr->initializeEllipsoid(polyhedron_ptr);
 				
+				std::cout << "Compute Ellipse Parameters" << std::endl;
+				tic();
 				component_ptr->computeEllipseParameters(polyhedron_ptr);
+				toc();
 				
 				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
 				
@@ -202,7 +207,10 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 				viewer->showAllScene();
 				viewer->recreateListsAndUpdateGL();
 				
+				std::cout << "Compare to dataset" << std::endl;
+				//tic();
 				compareToDataset(component_ptr,meshID);
+				//toc();
 			}
 		}
 	}
@@ -373,6 +381,8 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 	PolyhedronPtr sourcePoly = sourceCorrespondence->get_polyhedron_ptr();
 	Polyhedron::Iso_cuboid mbbox = sourcePoly->bbox();
 
+	double elapsedTime = 0.0;
+	
 	for(unsigned i=0;i<files.size();++i)
 	{
 		unsigned len = files[i].size();
@@ -390,7 +400,10 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 					viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[j]->widget());
 					if(viewerI->getScenePtr()->get_polyhedron()->empty())
 					{	
+						std::cout << "File :"<< files[i] << std::endl;
 						viewerI->getScenePtr()->add_mesh(path+"/"+files[i].c_str(),0,NULL,viewerI);
+						if(viewerI->getScenePtr()->get_polyhedron()->empty())
+						{continue;}
 						
 						PolyhedronPtr polyhedron_ptr = viewerI->getScenePtr()->get_polyhedron();
 						
@@ -659,6 +672,30 @@ void mepp_component_Correspondence_plugin::OnPrepareData()
 	}	
 }
 
+void mepp_component_Correspondence_plugin::OnSelectionBorder()
+{
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	
+	mainSegCtr.getBorder();
+	mainViewer->recreateListsAndUpdateGL();
+}
+
+void mepp_component_Correspondence_plugin::OnMoveBorder()
+{
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	
+	mainSegCtr.optimizeBorders();
+	mainViewer->recreateListsAndUpdateGL();
+}
+
+
+
 void mepp_component_Correspondence_plugin::OnCut()
 {	
 	//////////////////////////////////////////////////////////////////////////////////////////
@@ -680,7 +717,7 @@ void mepp_component_Correspondence_plugin::OnCut()
 	{
 		mainViewer->getScenePtr()->add_polyhedron(mainSegCtr.m_parts[p]);
 		mainViewer->getScenePtr()->setVisible(p,true);
-		colorMesh(mainSegCtr.m_parts[p],1,0,0);
+		//colorMesh(mainSegCtr.m_parts[p],1,0,0);
 	}
 	for(unsigned p=0; p<mainSegCtr.m_mainPart.size();++p)
 	{
@@ -767,14 +804,15 @@ void mepp_component_Correspondence_plugin::OnUnion()
 	///
 	//////////////////////////////////////////////////////////////
 	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
-	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron();
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
 	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
 	int cMesh = mainViewer->getScenePtr()->get_current_polyhedron();
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
-	
-	mainSegCtr.joinSegments(mainViewer);
-	//mainSegCtr.unionSegments(mainViewer);
+	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(cMesh);
+		
+	mainSegCtr.sewSegments(mainViewer,partPoly,mainPoly);
 	mainViewer->recreateListsAndUpdateGL();
+	
 	
 	
 }
@@ -792,6 +830,8 @@ void mepp_component_Correspondence_plugin::OnAddSegment()
 	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPolyhedron);
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
 	
+	std::cout << "After getting mainViewer " << std::endl;
+	
 	//////////////////////////////////////////////////////////////////////////////////////////
 	//// 
 	//// Add the selected part in the active viewer to _mainViewer_
@@ -803,6 +843,8 @@ void mepp_component_Correspondence_plugin::OnAddSegment()
 		int currentSecondaryViewer = viewer->getScenePtr()->get_current_polyhedron();
 		PolyhedronPtr secondaryPolyhedron = viewer->getScenePtr()->get_polyhedron(); // This is the polyhedron that will replace _mainPolyhedron_
 		
+		
+		
 		Correspondence_ComponentPtr corres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer,secondaryPolyhedron);
 		SegmentController & segCtr = corres->m_segCtr;
 		
@@ -810,7 +852,11 @@ void mepp_component_Correspondence_plugin::OnAddSegment()
 		mainSegCtr.m_parts.push_back(secondaryPolyhedron);
 		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
 		
+		std::cout << "After adding polyhedron " << std::endl;
+		mainViewer->recreateListsAndUpdateGL();
+		
 		mainSegCtr.alignSegments(mainViewer,mainPolyhedron,secondaryPolyhedron,currentMainViewer,mainViewer->get_nb_frames()-1);
+		std::cout << "After alignSegments " << std::endl;
 		
 		/*mainViewer->getScenePtr()->add_polyhedron(secondaryPolyhedron);
 		mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);*/
