@@ -762,6 +762,61 @@ void mepp_component_Correspondence_plugin::OnCut()
 	}
 }
 
+void mepp_component_Correspondence_plugin::OnSaveParts()
+{
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	ScenePtr scene = mainViewer->getScenePtr();
+	
+	// Select directory
+	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory to save parts"),"/home/leon/");	
+	std::string directory = path.toStdString();
+	
+	
+	// Save all polyhedron data and descriptor to directory
+	for(unsigned i=0; i<scene->get_nb_polyhedrons();++i)
+	{
+		PolyhedronPtr p = scene->get_polyhedron(i);
+		p->keep_largest_connected_components(1);
+		Correspondence_ComponentPtr corres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer,p);
+		std::stringstream filename; 
+		filename << directory << "/" << i << ".off";
+		corres->initParameters(4,i,directory);
+		corres->getShape().m_meshID = i;
+		corres->saveDescriptor(p,directory);
+		p->write_off(filename.str(),true,true);
+	}
+	
+}
+
+void mepp_component_Correspondence_plugin::OnLoadDescriptor()
+{
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	ScenePtr scene = mainViewer->getScenePtr();
+	
+	// Select directory
+	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory to save parts"),"/home/leon/");	
+	std::string directory = path.toStdString();
+	
+	
+	// Save all polyhedron data and descriptor to directory
+	for(unsigned i=0; i<scene->get_nb_polyhedrons();++i)
+	{
+		PolyhedronPtr p = scene->get_polyhedron(i);
+		
+		Correspondence_ComponentPtr corres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer,p);
+		
+		unsigned posB = p->pName.find_last_of("/");
+		unsigned posE = p->pName.find_last_of(".");
+		
+		unsigned meshID = atoi(p->pName.substr(posB+1 ,posE).c_str());
+		corres->initParameters(4,meshID,directory);
+		corres->getShape().m_meshID = meshID;
+		corres->readDescriptor(p,directory,false);
+	}
+}
+
+
+
 void mepp_component_Correspondence_plugin::OnGlue()
 {
 	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());

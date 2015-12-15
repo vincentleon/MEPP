@@ -59,7 +59,6 @@ endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-
 #------------------------------------------------------------------------------
 # MSVC
 #------------------------------------------------------------------------------
@@ -273,6 +272,8 @@ endif(GLEW_FOUND)
 if (FFMPEG_FOUND)
 	include_directories ( ${FFMPEG_INCLUDE_DIRS} )
 endif (FFMPEG_FOUND)
+
+#target_link_libraries( ${COMPONENT_NAME} -lnlopt )
 
 file(
 	GLOB_RECURSE

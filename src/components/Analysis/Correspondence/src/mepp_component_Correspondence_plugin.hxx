@@ -51,6 +51,9 @@ class mepp_component_Correspondence_plugin :
 			delete actionPrepareData;
 			delete actionGlue;
 			delete actionUnion;
+			delete actionMoveBorder;
+			delete actionSaveParts;
+			delete actionLoadDescriptor;
 		}
 
 		void init(mainwindow* mainWindow, QList<QMdiSubWindow *> lw)
@@ -135,6 +138,19 @@ class mepp_component_Correspondence_plugin :
 			{
 				connect(actionMoveBorder, SIGNAL(triggered()),this,SLOT(OnMoveBorder()));
 			}
+			
+			actionSaveParts = new QAction(tr("Save parts"),this);
+			if( actionSaveParts )
+			{
+				connect(actionSaveParts, SIGNAL(triggered()),this,SLOT(OnSaveParts()));
+			}
+			
+			actionLoadDescriptor = new QAction(tr("Load Descriptor"),this);
+			if( actionLoadDescriptor )
+			{
+				connect(actionLoadDescriptor, SIGNAL(triggered()),this,SLOT(OnLoadDescriptor()));
+			}
+			
 		}
 
 		QList<QAction*> actions() const
@@ -158,7 +174,9 @@ class mepp_component_Correspondence_plugin :
 				<< actionPrepareData
 				<< actionUnion
 				<< actionSelBorder
-				<< actionMoveBorder;
+				<< actionMoveBorder
+				<< actionSaveParts
+				<< actionLoadDescriptor;
 		}
 
 		virtual void pre_draw();
@@ -201,6 +219,8 @@ class mepp_component_Correspondence_plugin :
 		void OnUnion();
 		void OnSelectionBorder();
 		void OnMoveBorder();
+		void OnSaveParts();
+		void OnLoadDescriptor();
 		
   private:
     int m_currentLabel;
@@ -218,6 +238,9 @@ class mepp_component_Correspondence_plugin :
     QAction *actionUnion;
     QAction *actionSelBorder;
     QAction *actionMoveBorder;
+    QAction *actionSaveParts;
+    QAction *actionLoadDescriptor;
+    
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
 };

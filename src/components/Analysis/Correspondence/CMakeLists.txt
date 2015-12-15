@@ -219,7 +219,7 @@ file(
 set( source_files ${source_files} ../../../mepp/mepp_action.hxx )
 
 add_library(
-	${COMPONENT_NAME} 
+	${COMPONENT_NAME}
 	SHARED
 	${source_files}
 	${use_components}

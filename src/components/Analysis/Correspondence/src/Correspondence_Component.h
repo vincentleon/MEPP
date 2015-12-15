@@ -45,7 +45,7 @@ class Correspondence_Component :
 		
 		void learnDescriptor(PolyhedronPtr p, std::string meshDir);
 		
-		void readDescriptor(PolyhedronPtr p,std::string meshDir);
+		void readDescriptor(PolyhedronPtr p,std::string meshDir, bool normalize=true);
 		
 		void showDescriptor(PolyhedronPtr p, int dim);
 		
@@ -100,6 +100,11 @@ class Correspondence_Component :
 		SegmentController m_segCtr;
 		
 		void scaleMesh(Polyhedron::Iso_cuboid bbox, PolyhedronPtr p);
+		
+		
+		void saveDescriptor(PolyhedronPtr p,std::string meshDir);
+		
+		Analysis::Shape & getShape(){return m_Shape;}
 	private : 
 		
 		int m_nbLabel;
@@ -137,7 +142,7 @@ class Correspondence_Component :
 		
 		void initGeodesicMesh(PolyhedronPtr p);
 		
-		void saveDescriptor(PolyhedronPtr p,std::string meshDir);
+		
 		
 		void initMaxVector(PolyhedronPtr p);
 		void normalize(std::vector<double> & descr);

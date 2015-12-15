@@ -104,7 +104,7 @@ void Correspondence_Component::saveDescriptor(PolyhedronPtr p,std::string meshDi
 	file.close();
 }
 
-void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDir)
+void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDir, bool normalize)
 {
 	Point3d bb = Point3d(p->xmin(),p->ymin(),p->zmin());
 	std::ifstream file;
@@ -144,13 +144,16 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDi
 	{
 		std::cout << "Impossible d'ouvrir le fichier "<<ss.str()<<" !\n";
 	}
-	initMaxVector(p);
-	for(Vertex_iterator pVertex = p->vertices_begin();
-		    pVertex!=p->vertices_end();++pVertex)
+	if(normalize)
 	{
-		std::vector<double> descr = pVertex->getSemantic();
-		this->normalize(descr);
-		pVertex->setSemantic(descr);
+		initMaxVector(p);
+		for(Vertex_iterator pVertex = p->vertices_begin();
+			pVertex!=p->vertices_end();++pVertex)
+		{
+			std::vector<double> descr = pVertex->getSemantic();
+			this->normalize(descr);
+			pVertex->setSemantic(descr);
+		}
 	}
 }
 

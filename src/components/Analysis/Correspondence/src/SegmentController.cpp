@@ -342,14 +342,14 @@ void SegmentController::cutSegments()
 	
 	for(auto it = ccMap.begin(); it!= ccMap.end(); ++it)	
 	{
-		if(it->second >0 )
+		/*if(it->second >0 )
 		{
-			it->first->color(1,1,0);
+			//it->first->color(1,1,0);
 		}
 		else if (it->second<0)
 		{
-			it->first->color(0,1,1);
-		}
+			//it->first->color(0,1,1);
+		}*/
 		labelSet.insert(it->second);
 	}
 	// All vertices have been assigned with a cc number
@@ -1019,7 +1019,7 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 	
 	c1 = target->border_halfedges_begin();
 	
-	c1->vertex()->color(1,0,0);
+	//c1->vertex()->color(1,0,0);
 	
 	double thresh = 100.0;
 	int borderIndex;
@@ -1170,7 +1170,7 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 	target->compute_normals();
 	
 	softICPController icp(model,target);
-	icp.buildTreeStructure();
+	icp.buildTreeStructure(2);
 	
 	v->recreateListsAndUpdateGL();
 	
