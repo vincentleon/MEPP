@@ -89,6 +89,7 @@ public:
 // 	//void sewSegments(Viewer * v);
 	
 	void fitSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model, int & idBordTarget, int & idBordModel);
+	
 	void sewSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model);
 	
 	void fuseMeshes(Viewer *v, PolyhedronPtr target, PolyhedronPtr model);
