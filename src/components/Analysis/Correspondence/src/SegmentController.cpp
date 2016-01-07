@@ -996,7 +996,7 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 	//model->keep_largest_connected_components(1);
 	//std::cout << " after largestconnectedCC " << std::endl;
 	
-	unionSegments(v);
+	/*unionSegments(v);
 	std::cout << " after unionSegments " << std::endl;
 	
 	v->recreateListsAndUpdateGL();
@@ -1044,7 +1044,7 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 					model = modelTest;
 				}
 		}
-	}
+	}*/
 	/*
 	std::vector<Halfedge_handle> cBord1; cBord1.push_back(c1);
 	std::vector<Halfedge_handle> cBord2; cBord2.push_back(c2);
@@ -1170,8 +1170,11 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 	target->compute_normals();
 	
 	softICPController icp(model,target);
-	icp.buildTreeStructure(2);
+	//icp.buildTreeStructure(2);
+	icp.snapRegions(0.2,1);
 	
+	
+	//test_softICP_SVD();
 	v->recreateListsAndUpdateGL();
 	
 }
@@ -1736,4 +1739,83 @@ void collectVertsAndFaces(PolyhedronPtr p, std::vector<double> & coords, std::ve
 		}
 		while(++h!=pFacet->facet_begin());
 	}
+}
+
+void test_softICP_SVD()
+{
+	
+	// Create dummy triangle data
+	std::vector<double> coords;
+	std::vector<int> faces;
+	
+	coords.push_back(0.0); coords.push_back(0.0); coords.push_back(0.0); // P1
+	coords.push_back(2.0); coords.push_back(0.0); coords.push_back(0.0); // P2
+	coords.push_back(1.0); coords.push_back(1.5); coords.push_back(0.0); // P3
+	faces.push_back(0); faces.push_back(1); faces.push_back(2);
+	
+	
+	PolyhedronPtr model(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,faces);
+	model->delegate(builder);
+	
+	coords.clear();
+	faces.clear();
+	
+	coords.push_back(1.0); coords.push_back(2.0); coords.push_back(-0.5); // Q1
+	coords.push_back(1.0); coords.push_back(4.0); coords.push_back(-0.5); // Q2
+	coords.push_back(-0.5); coords.push_back(3.0); coords.push_back(-0.5); // Q3
+
+	faces.push_back(0); faces.push_back(1); faces.push_back(2);
+
+	PolyhedronPtr target(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> buildert(coords,faces);
+	target->delegate(buildert);
+	
+	softICPController softicp(model,target);
+	
+	std::map<Vertex_handle,Vertex_handle> phi;
+	auto qVertex = target->vertices_begin();
+	for(auto pVertex = model->vertices_begin(); 
+	    pVertex!= model->vertices_end();
+		++pVertex,++qVertex)
+	{
+		phi[pVertex] = qVertex;
+	}
+		
+		
+	std::vector<pointTransformation> transf;
+	for(auto pVertex = model->vertices_begin();
+	    pVertex!= model->vertices_end();
+		++pVertex)
+	{    
+		std::vector<Vertex_handle> N;
+		std::vector<Vertex_handle> phiN;
+		for(auto pVertex = model->vertices_begin();
+		    pVertex != model->vertices_end();
+			++pVertex)
+		{
+			N.push_back(pVertex);
+			phiN.push_back(phi[pVertex]);
+		}
+		pointTransformation ti = softicp.computeTransformation(N,phiN);
+		transf.push_back(ti);
+		std::cout<<std::endl;
+	}
+	
+	int i = 0;
+	for(auto pVertex = model->vertices_begin();
+	    pVertex!= model->vertices_end();
+		++pVertex)
+	{
+		Point3d p = pVertex->point();
+		std::cout << p.x() << " " << p.y() << " " << p.z() << std::endl;
+		softicp.applyTransformation(pVertex,transf[i],1,1);
+		p = pVertex->point();
+		std::cout << p.x() << " " << p.y() << " " << p.z() << std::endl;
+		Point3d q = phi[pVertex]->point();
+		std::cout << q.x() << " " << q.y() << " " << q.z() << std::endl;
+		std::cout << std::endl;
+		i++;
+	}
+	
 }

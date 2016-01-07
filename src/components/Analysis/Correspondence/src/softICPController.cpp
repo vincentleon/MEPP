@@ -27,7 +27,6 @@ void softICPController::computeSnappingRegionCorrespondence(bool order)
 		s1 = &m_treeStructure1.m_vertices;
 		s2 = &m_treeStructure2.m_vertices;
 	}
-	
 	else // reverse order between meshes
 	{
 		s2 = &m_treeStructure1.m_vertices;
@@ -42,6 +41,7 @@ void softICPController::computeSnappingRegionCorrespondence(bool order)
 		for(auto c = s2->begin(); c!=s2->end(); ++c)
 		{
 			double dist = computePhiDistance((*it),(*c));
+			//double dist = computePhiDistance((*it),(*c),0.7,0.3,0.0);
 			if(dist < distMin)
 			{
 				bestCorres = *c;
@@ -55,66 +55,62 @@ void softICPController::computeSnappingRegionCorrespondence(bool order)
 }
 
 
-void softICPController::buildTreeStructure(const int sizeOfTree)
+void softICPController::buildTreeStructure(const int sizeOfTree,double R, double squared_euclidean_radius)
 {
 	/*	First, identify the snapping region 
 	 *	on the two meshes.
 	 */
-	getSnappingRegion();
+	//std::cout << "Get Snapping Region " << std::endl;
+	getSnappingRegion(R,squared_euclidean_radius);
 	
-//#pragma omp parallel sections num_threads(2)
-//{	
-	kMedoidMain(&m_treeStructure1,4);
-	colorCluster(&m_treeStructure1);
-//#pragma omp section
-	kMedoidMain(&m_treeStructure2,4);
-	colorCluster(&m_treeStructure2);
-//}
+	deformationNode * base = &m_treeStructure1;
+		
+	#pragma omp parallel sections num_threads(2)
+{
+	hierarchicalBuild(&m_treeStructure1,sizeOfTree,0,4);
+	#pragma omp section
+	hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
+}
+		
+	m_treeStructure1.m_parent = NULL;
+	m_treeStructure2.m_parent = NULL;
+	m_treeStructure1.m_clusterID = -1;
+	m_treeStructure2.m_clusterID = -1;
 	
-	/*deformationNode * base = &m_treeStructure1;
-	std::cout << "base size : " << base->m_childrenNodes.size() << std::endl;
-	for(unsigned level=0;level<sizeOfTree-1;++level)
-	{
-		std::cout << " level : " << level << std::endl;
-		for(unsigned c=0; c<base->m_childrenNodes.size() ;++c)
-		{
-			std::cout << "\t children : " << c << std::endl;
-			// cluster nodes in lower level
-			kMedoidMain(base->m_childrenNodes[c],4);
-			//colorCluster(base->m_childrenNodes[c]);
-		}
-	}
-	std::cout << std::endl;
-	base = &m_treeStructure2;
-	for(unsigned level=0;level<sizeOfTree-1;++level)
-	{
-		for(unsigned c=0; c<base->m_childrenNodes.size() ;++c)
-		{
-			// cluster nodes in lower level
-			kMedoidMain(base->m_childrenNodes[c],4);
-			//colorCluster(base->m_childrenNodes[c]);
-		}
-	}
-	std::cout << std::endl;*/
-	
-	
-	/*	Compute the correspondence 
-	 * 	Phi between the two snapping regions
-	 */
-	//computeSnappingRegionCorrespondence();
 }
 
-/*void softICPController::hierarchicalBuild(deformationNode* root, const int sizeOfTree, int level)
+void softICPController::hierarchicalBuild(deformationNode* root, const int sizeOfTree, int level, int k)
 {
 	if(level != sizeOfTree)
 	{
-		for(unsigned c=0;c<root->m_childrenNodes.size();++c)
+		if(root->m_vertices.size() > k)
 		{
-			hierarchicalBuild(root->m_childrenNodes[c],sizeOfTree,level+1);
+			std::cout << level << std::endl;
+			kMedoidMain(root,k);
+		
+			for(unsigned c=0;c<root->m_childrenNodes.size();++c)
+			{	
+				hierarchicalBuild(root->m_childrenNodes[c],sizeOfTree,level+1,k);
+			}
 		}
 	}
-	kMedoidMain(root,4);
-}*/
+	// else : stopping case
+	
+}
+
+void softICPController::displayNode(deformationNode* root)
+{
+	std::cout << root->m_childrenNodes.size() << " how many children nodes" << std::endl;
+	std::cout << root->m_cluster.size() << " size of patch vertices IDs" <<  std::endl;
+	std::cout << root->m_clusterID << " id wrt the parent node" <<  std::endl;
+	std::cout << root->m_vertices.size()<< " how many vertices in this patch" << std::endl;	
+	std::cout << std::endl;
+	for(unsigned c=0;c <root->m_childrenNodes.size(); ++c)
+	{
+		displayNode(root->m_childrenNodes[c]);
+	}
+}
+
 
 
 
@@ -122,7 +118,7 @@ void softICPController::colorCluster(deformationNode* root)
 {
 	if(root->m_childrenNodes.size() != 4)
 	{
-		std::cout << " cluster number != 4 " << std::endl;
+		//std::cout << " cluster number != 4 " << std::endl;
 		return;
 	}
 	for(auto h = root->m_childrenNodes[0]->m_vertices.begin(); 
@@ -152,9 +148,8 @@ void softICPController::colorCluster(deformationNode* root)
 }
 
 
-void softICPController::getSnappingRegion()
+void softICPController::getSnappingRegion(double R, double squared_euclidean_radius)
 {
-	double R = 0.1; //Region Size
 	
 	// First, normalize boundary edges order
 	m_polyhedron1->normalize_border();
@@ -194,9 +189,6 @@ void softICPController::getSnappingRegion()
 	Vertex_handle v2 = border2->vertex();
 	semanticDescr & sd2 = v2->getSemantic();
 	
-	double squared_euclidean_radius = 0.05;
-
-	
 	Point3d center = border2->vertex()->point();
 	for(auto pHalfedge = m_polyhedron1->halfedges_begin();pHalfedge!=m_polyhedron1->halfedges_end();++pHalfedge)
 	{
@@ -213,11 +205,20 @@ void softICPController::getSnappingRegion()
 				semanticDescr & borderDescr = it->vertex()->getSemantic();
 				//std::cout << heDescr.size();
 				//std::cout << borderDescr.size() << std::endl;
+				double distToLoop = L2Dist(heDescr,borderDescr);
 				
-				if(L2Dist(heDescr,borderDescr)<R)
+				if(distToLoop<R)
 				{
 					m_treeStructure1.m_vertices.insert(pHalfedge->vertex());
 					pHalfedge->vertex()->color(1,0,0);
+					if(!m_distToLoop.count(pHalfedge->vertex()))
+					{
+						m_distToLoop[pHalfedge->vertex()] = distToLoop;
+					}
+					else if (m_distToLoop[pHalfedge->vertex()] > distToLoop)	
+					{
+						m_distToLoop[pHalfedge->vertex()] = distToLoop;
+					}
 				}
 				it = it->next();
 			}
@@ -241,11 +242,19 @@ void softICPController::getSnappingRegion()
 				semanticDescr & borderDescr = it->vertex()->getSemantic();
 				//std::cout << heDescr.size();
 				//std::cout << borderDescr.size() << std::endl;
-				
-				if(L2Dist(heDescr,borderDescr)<R)
+				double distToLoop = L2Dist(heDescr,borderDescr);
+				if(distToLoop<R)
 				{
 					m_treeStructure2.m_vertices.insert(pHalfedge->vertex());
 					pHalfedge->vertex()->color(1,0,0);
+					if(!m_distToLoop.count(pHalfedge->vertex()))
+					{
+						m_distToLoop[pHalfedge->vertex()] = distToLoop;
+					}
+					else if (m_distToLoop[pHalfedge->vertex()] > distToLoop)	
+					{
+						m_distToLoop[pHalfedge->vertex()] = distToLoop;
+					}
 				}
 				it = it->next();
 			}
@@ -256,21 +265,34 @@ void softICPController::getSnappingRegion()
 
 void softICPController::cluster(deformationNode* root)
 {
+	
+	std::map<Vertex_handle,bool> isRep;
+	for(unsigned r=0;r<root->m_childrenNodes.size();++r)
+	{
+		isRep[root->m_childrenNodes[r]->m_rep] = true;
+	}
+	
 	for(auto v = root->m_vertices.begin(); v!=root->m_vertices.end();++v)
 	{
+		if(isRep[*v]){continue;} // dont cluster the rep
 		// For each point in the set, find the closest rep
 		double distMin = std::numeric_limits<double>::max();
 		for( int clust = 0; clust < root->m_childrenNodes.size(); ++clust)
 		{
- 			Vertex_handle rep = root->m_childrenNodes[clust]->m_rep;
-			double dist = computePhiDistance(rep,*v,0.0,0.0,1.0);
+ 			Vertex_handle & rep = root->m_childrenNodes[clust]->m_rep;
+			
+			double dist = computePhiDistance(rep,*v);
+			//double dist = computePhiDistance(rep,*v,0.7,0.3,0.0);
 			if(dist<distMin)
 			{
 				distMin = dist;
 				root->m_cluster[*v] = clust;
+				
 			}
 		}
+		
 	}
+	// Just check that rep cluster has not been changed
 }
 
 void softICPController::updateRep(deformationNode* root)
@@ -280,24 +302,54 @@ void softICPController::updateRep(deformationNode* root)
 	
 	candidateRep.resize(root->m_childrenNodes.size());
 	
-	for(auto v = root->m_vertices.begin(); v!=root->m_vertices.end();++v)
+	/*for(auto v = root->m_vertices.begin(); v!=root->m_vertices.end();++v)
 	{
 		int clust = root->m_cluster[*v];
-		/* consider that h is a candidate medoid
-		*	Compute the sum of squared distances
-		* 	to every point in the set
-		* */
+		
+		// consider that v is the rep for cluster
+		// compute sum of squared distance to the rest of the cluster
+		
 		double e = 0.0;
 		for(auto g = root->m_vertices.begin(); g!=root->m_vertices.end();++g)
 		{
 			if(root->m_cluster[*g]!=clust){continue;}
-			double dist = computePhiDistance((*v),(*g),0.0,0.0,1.0);
+			//double dist = computePhiDistance((*v),(*g),0.0,0.0,1.0);
+			double dist = computePhiDistance((*v),(*g));
+			//double dist = computePhiDistance((*v),(*g),0.4,0.2,0.0);
 			e += dist*dist;
 		}
 		if(e<distMin[clust])
 		{
 			distMin[clust] = e;
+			//root->m_childrenNodes[clust]->m_rep = *v;
+			candidateRep[clust] = *v;
 			root->m_childrenNodes[clust]->m_rep = *v;
+			root->m_cluster[*v] = clust;
+		}
+	}*/
+	
+	for(unsigned c = 0; c < root->m_childrenNodes.size();++c)
+	{
+		double eMin = std::numeric_limits<double>::max();
+		for(auto v = root->m_vertices.begin(); v!=root->m_vertices.end();++v)
+		{
+			if(root->m_cluster[*v] != c){continue;}
+			// compute sum of squared distance to the rest of the cluster
+			double e = 0.0;
+			for(auto g = root->m_vertices.begin(); g!=root->m_vertices.end();++g)
+			{
+				if(root->m_cluster[*g] !=c){continue;}
+				{
+					double dist = computePhiDistance((*v),(*g));
+					//double dist = computePhiDistance(*v,*g,0.7,0.3,0.0);
+					e += dist*dist;
+				}
+			}
+			if(e < eMin)
+			{
+				root->m_childrenNodes[c]->m_rep = *v;
+				eMin = e;
+			}
 		}
 	}
 }
@@ -308,35 +360,62 @@ void softICPController::kMedoidMain(deformationNode * root, int k)
 	// Compute the first medoid 
 	//updateRep(root);
 	// Create the k clusters and randomly initialize medoids
+	//std::cout << "init k clusters " << std::endl;
+	
+	std::set<int> seq; // make sure we have unique random rep
+	
+	//std::cout << "size :" << root->m_vertices.size() << std::endl;
+	
 	for(unsigned c=0; c<k; ++c)
 	{
 		root->m_childrenNodes.push_back(new deformationNode);
 		root->m_childrenNodes.back()->m_parent = root;
 		root->m_childrenNodes.back()->m_clusterID = c;
-		int r = (rand() / RAND_MAX) * root->m_vertices.size();
+		
+		int r = -1;
+		bool cond = true;
+		while(cond)
+		{
+			r = (rand() / (double)RAND_MAX ) * (root->m_vertices.size() -1); 
+			if(seq.count(r)==0)
+			{
+				seq.insert(r);
+				cond = false;
+			}
+		}
 		auto it = root->m_vertices.begin();
-		for(unsigned v=0;v<r;++v){++it;}
+		
+		for(unsigned v=0;v<=r;++v){++it;}
 		root->m_childrenNodes.back()->m_rep = *it;
+		//root->m_childrenNodes.back()->m_rep->color(1,1,0);
+		root->m_cluster[root->m_childrenNodes.back()->m_rep]=c;
 	}
+	
 	// The kMedoidloop
+	//std::cout << "kMedoid Loop " << std::endl;	
+	cluster(root);
 	for(unsigned i=0;i<10;++i)
 	{
+		updateRep(root);
 		cluster(root);
-		for(unsigned c=0;c<k;++c)
-		{
-			updateRep(root);
-		}
 	}
+	
+	//std::cout << "fill patch vertices wrt clusters " << std::endl;
 	// Finally put halfedges in the right patch (cluster)
+	
+	
 	for(auto it = root->m_cluster.begin(); it!=root->m_cluster.end(); ++it)
 	{
 		root->m_childrenNodes[it->second]->m_vertices.insert(it->first);
 	}
-	std::cout << "Display cluster info : " << std::endl;
-	for(unsigned l=0;l<k;++l)
+	
+	/*for(unsigned c=0;c<k;++c)
 	{
-		std::cout << "\t cluster #"<<l<<"  size : " << root->m_childrenNodes[l]->m_vertices.size() << std::endl;
-	}
+		std::cout << "cluster #"<<c<<" pop:"<<root->m_childrenNodes[c]->m_vertices.size() << std::endl;
+	}*/
+	
+	std::cout << std::endl;
+	
 	// compute distances between the rep of all clusters
 	computeMatrixDistance(root);
 }
@@ -345,9 +424,11 @@ void softICPController::computeMatrixDistance(deformationNode* root)
 {
 	int nbcluster = root->m_childrenNodes.size();
 	
-	
-	myMatrix & m  = root->m_distanceMatrix;
-	m(nbcluster,nbcluster);
+	//root->m_distanceMatrix(nbcluster,nbcluster);
+	//myMatrix & m = root->m_distanceMatrix;
+	//m =
+	root->m_distanceMatrix = myMatrix(nbcluster,nbcluster);
+	myMatrix & m = root->m_distanceMatrix;
 	
 	for(unsigned i=0; i<nbcluster;++i)
 	{
@@ -356,6 +437,8 @@ void softICPController::computeMatrixDistance(deformationNode* root)
 		{
 			Vertex_handle rep2 = root->m_childrenNodes[j]->m_rep;
 			double dist = computePhiDistance(rep1,rep2,0.0,0.0,1.0);
+			//double dist = computePhiDistance(rep1,rep2);
+			//double dist = computePhiDistance(rep1,rep2,0.7,0.3,0.0);
 			m[i][j] = dist;
 			m[j][i] = dist;
 		}
@@ -368,7 +451,14 @@ void softICPController::snapRegions(double R, unsigned elasticity)
 	bool convergenceCriterion = false;
 	bool order = false;
 	int iter = 0;
-	const int itermax = 5;
+	//const int itermax = 100;
+	const int itermax = 10;
+	
+	std::cout << "Build Tree Structure " << std::endl;
+	buildTreeStructure(10,R);
+	
+	//colorCluster(&m_treeStructure1);
+	//colorCluster(&m_treeStructure2);
 	
 	while(!convergenceCriterion)
 	{
@@ -380,116 +470,151 @@ void softICPController::snapRegions(double R, unsigned elasticity)
 		
 		convergenceCriterion = (iter == itermax);
 		
+		// find correspondence between the 2 snapping regions
+		computeSnappingRegionCorrespondence(order);
+		
+		deformationNode * treeStructure;
 		if(order)
 		{
-			ma = m_polyhedron1;
-			mb = m_polyhedron2;
+			treeStructure = &m_treeStructure1;
 		}
 		else
 		{
-			mb = m_polyhedron1;
-			ma = m_polyhedron2;
+			treeStructure = &m_treeStructure2;
 		}
 		
-		// find correspondence between the 2 snapping regions
-		computeSnappingRegionCorrespondence(order);
-		// for each point in ma
-		for(auto pVertex = ma->vertices_begin();
-		    pVertex!=ma->vertices_end();
-			++pVertex)
+		unsigned int nbP = 0;
+		
+		std::vector <pointTransformation> transf;
+		
+		for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end();++it)
 		{
- 			std::set<Vertex_handle> N = getNeighborhood(pVertex,R,iter,elasticity,order);
-			std::set<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
+			Vertex_handle pVertex = *it;
+ 			std::vector<Vertex_handle> N = getNeighborhood(pVertex,R,iter,elasticity,order);
+			//std::cout << "got neighborhood : " << N.size()<<  std::endl;
+			std::vector<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
+			//std::cout << "got corresponding neighborhood : " << phiN.size() << std::endl;
 			pointTransformation ti = computeTransformation(N,phiN);
-			// apply only part of the transformation
-			applyTransformation(pVertex,ti,iter,itermax);
+			transf.push_back(ti);
+			nbP++;
 		}
+		int i=0;
+		for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end();++it)
+		{
+			Vertex_handle pVertex = *it;
+			applyTransformation(pVertex,transf[i],iter,itermax);
+			i++;
+		}
+		
+		//std::cout << iter << std::endl;
 	}
 }
 
 void softICPController::applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, int itermax)
 {
-	double li = iter/itermax;
+	double li = iter/(double)itermax;
 	ti.T = li*ti.T;
 	ti.Q.setAxisAngle(ti.Q.axis(),li*ti.Q.angle());
+	
 	Point3d pos = p->point();
 	qglviewer::Vec V = ti.Q * qglviewer::Vec(pos.x(),pos.y(),pos.z()) + ti.T;
+	//qglviewer::Vec V = qglviewer::Vec(pos.x(),pos.y(),pos.z()) + ti.T;
+	
 	p->point() = CGAL::ORIGIN + Vector(V[0],V[1],V[2]);
 }
 
-set< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, double R, unsigned int iter, unsigned int elasticity, bool order)
+vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, double R, unsigned int iter, unsigned int elasticity, bool order)
 {
-	double distToLoop = 0;
+	double distToLoop = m_distToLoop[p];
 	
 	// compute the size of the local neighborhood
-	double expo = (iter*elasticity)/distToLoop;
-	double radius = exp(-expo*expo);
-	
-	// find the leaf node that contains p
+	double expo = (iter*elasticity)/(distToLoop*500);
+	double radius = R * exp(-expo*expo);
+
 	deformationNode * node;
 	deformationNode * containsP;
 	if(order) {node = &m_treeStructure1;}
 	else{node = &m_treeStructure2;}
+	
+	int nbClust = node->m_childrenNodes.size();
+	
 	while(node->m_childrenNodes.size()!=0)
 	{
 		int clust = node->m_cluster[p];
 		node = node->m_childrenNodes[clust];
 	}
-	containsP = node->m_parent; // this is the leaf node that contains p
 	
-	std::set<Vertex_handle> N;
+	std::vector<Vertex_handle> N;
+ 	containsP = node; // leaf node
+	node = node->m_parent; // parent node, to access matrix
 	
-	while(true)
+	bool getout = false;
+	while(!getout)
 	{
-		
-		int nbClust = node->m_childrenNodes.size();
-		node = containsP->m_parent; // parent node of the one that contains p
-		
-		if(node == NULL)
-		{
-			N.insert(node->m_vertices.begin(),node->m_vertices.end());
-			break;
-		} // use the full snapping region as neigborhood if root == m_treeStructureX
-		
 		// compute the maximum distance to containsP
 		double maxDist = 0.0;
 		for(unsigned k=0;k<nbClust;++k)
 		{
 			double dist = node->m_distanceMatrix[k][containsP->m_clusterID];
+			if(dist>maxDist)
+			{
+				maxDist = dist;
+			}
 		}
+		
 		if( radius < maxDist ) // collect all the patches whose distance is smaller than radius
 		{
+			//std::cout << "radius < madDist " << std::endl;
 			for(unsigned k=0;k<nbClust;++k)
 			{
 				double dist = node->m_distanceMatrix[k][containsP->m_clusterID];
-				if(dist < radius)
+				if(dist <= radius)
 				{
-					N.insert(node->m_childrenNodes[k]->m_vertices.begin(),node->m_childrenNodes[k]->m_vertices.end());
+				//std::cout << "dist < radius " << std::endl;
+					//N.insert(node->m_childrenNodes[k]->m_vertices.begin(),node->m_childrenNodes[k]->m_vertices.end());
+					for(auto it = node->m_childrenNodes[k]->m_vertices.begin();it!=node->m_childrenNodes[k]->m_vertices.end();++it)
+					{
+						N.push_back(*it);
+					}
 				}
-			}	
-			break;
+			}
+			
+			getout = true;
 		}
-		else // go up one level in the hierarchy and repeat the process
+		//else // go up one level in the hierarchy and repeat the process
+		if (radius >=maxDist || N.size() < 3) 
 		{
-			node = node->m_parent;
-			containsP = containsP->m_parent;
+			N.clear();
+			if(node->m_clusterID == -1)
+			{
+				for(auto it = node->m_vertices.begin();it!=node->m_vertices.end();++it)
+				{
+					N.push_back(*it);
+				}
+				getout = true;
+			}
+			else{
+				node = node->m_parent;
+				getout = false;
+			}
 		}
 	}
 	
 	return N;
 }
 
-std::set<Vertex_handle> softICPController::getCorrespondingNeighborhood( std::set<Vertex_handle> & N)
+std::vector<Vertex_handle> softICPController::getCorrespondingNeighborhood( std::vector<Vertex_handle> & N)
 {
-	std::set<Vertex_handle> cN;
+	std::vector<Vertex_handle> cN;
 	for(auto it = N.begin(); it!= N.end(); ++it)
 	{
-		cN.insert(m_Phi[*it]);
+		cN.push_back(m_Phi[*it]);
 	}
 	return cN;
 }
 
-pointTransformation softICPController::computeTransformation(std::set<Vertex_handle> & N, std::set<Vertex_handle> & phiN)
+pointTransformation softICPController::
+computeTransformation(std::vector<Vertex_handle> & N, std::vector<Vertex_handle> & phiN)
 {
 	pointTransformation pi;
 	
@@ -505,8 +630,8 @@ pointTransformation softICPController::computeTransformation(std::set<Vertex_han
 	
 	auto itt=phiN.begin();
 	int i=0;
-#pragma omp parallel for private(i,itt) default(none) shared(p_m,p_t,N,phiN)
-	for(auto it=N.begin();it!=N.end();++it,++itt,i++)
+//#pragma omp parallel for private(i,itt) default(none) shared(p_m,p_t,N,phiN)
+	for(auto it=N.begin();it!=N.end();++it)
 	{
 		Point3d np = (*it)->point();
 		p_t.val[i][0] = np.x(); mut0 +=p_t.val[i][0];
@@ -516,16 +641,35 @@ pointTransformation softICPController::computeTransformation(std::set<Vertex_han
 		// get nearest point
 		Point3d npp = (*itt)->point();
 		p_m.val[i][0] = npp.x(); mum0 += p_m.val[i][0];
-		p_m.val[i][1] = npp.y(); mum1 += p_m.val[i][0];
-		p_m.val[i][2] = npp.z(); mum2 += p_m.val[i][0];
+		p_m.val[i][1] = npp.y(); mum1 += p_m.val[i][1];
+		p_m.val[i][2] = npp.z(); mum2 += p_m.val[i][2];
+		
+		++itt;
+		++i;
 	}
+	
+	mu_m.val[0][0] = mum0;
+	mu_m.val[0][1] = mum1;
+	mu_m.val[0][2] = mum2;
+	
+	mu_t.val[0][0] = mut0;
+	mu_t.val[0][1] = mut1;
+	mu_t.val[0][2] = mut2;
 	
 	mu_m = mu_m/(double)N.size();
 	mu_t = mu_t/(double)N.size();
 	
-	// substract mean (translation)
+	/*std::cout << "mu_m" << mu_m << std::endl;
+	std::cout << "mu_t" << mu_t << std::endl;
+	
+	std::cout << "p_m" << mu_m << std::endl;
+	std::cout << "p_t" << mu_t << std::endl;*/
+	
 	Matrix q_m = p_m - Matrix::ones(N.size(),1)*mu_m;
 	Matrix q_t = p_t - Matrix::ones(N.size(),1)*mu_t;
+// 	
+	/*std::cout << "q_m" << q_m << std::endl;
+	std::cout << "q_t" << q_t << std::endl;*/
 	
 	// compute rotation matrix R and translation vector t
 	Matrix H = ~q_t*q_m;
@@ -552,9 +696,11 @@ pointTransformation softICPController::computeTransformation(std::set<Vertex_han
 	}
 	pi.Q.setFromRotationMatrix(rData);
 	pi.T.setValue(t.val[0][0],t.val[1][0],t.val[2][0]);
+	//std::cout << "translation :" << pi.T << std::endl;
+	//std::cout << "rotation :" << pi.Q.angle() << "  " << pi.Q.axis()  << std::endl;
+	
 	return pi;
 }
-
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1, double w2, double w3)
 {

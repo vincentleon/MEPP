@@ -183,4 +183,6 @@ double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2);
 simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p);
 PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p);
 
+void test_softICP_SVD();
+
 #endif // SEGMENTCONTROLLER_H
