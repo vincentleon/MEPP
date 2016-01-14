@@ -71,6 +71,8 @@ private:
 	
 	void colorCluster(deformationNode * root);
 	
+	void colorLastClusters(deformationNode * root);
+	
 	void cluster(deformationNode * root);
 	
 	void updateRep(deformationNode * root);
@@ -81,9 +83,12 @@ private:
 	
 	std::vector<Vertex_handle> getCorrespondingNeighborhood( std::vector<Vertex_handle> & N);
 	
-	
+	double computeDelta(bool order);
 	
 	void displayNode( deformationNode * root);
+	
+	void subdivideLeaves( deformationNode * root);
+	
 };
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);

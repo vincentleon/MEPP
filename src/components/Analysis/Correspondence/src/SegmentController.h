@@ -36,8 +36,6 @@ typedef std::map<halfedge_descriptor, std::size_t>     Internal_hedge_map;
 typedef boost::associative_property_map<Internal_vertex_map>   Vertex_index_map;
 typedef boost::associative_property_map<Internal_hedge_map>    Hedge_index_map;
 
-
-
 struct snaxel
 {
 	
@@ -91,6 +89,8 @@ public:
 	void fitSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model, int & idBordTarget, int & idBordModel);
 	
 	void sewSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model);
+	
+	void softICP(Viewer * v, PolyhedronPtr target, PolyhedronPtr model);
 	
 	void fuseMeshes(Viewer *v, PolyhedronPtr target, PolyhedronPtr model);
 	

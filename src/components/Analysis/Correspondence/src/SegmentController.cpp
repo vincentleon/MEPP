@@ -1171,7 +1171,7 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 	
 	softICPController icp(model,target);
 	//icp.buildTreeStructure(2);
-	icp.snapRegions(0.2,1);
+	icp.snapRegions(0.3,1);
 	
 	
 	//test_softICP_SVD();
@@ -1740,6 +1740,24 @@ void collectVertsAndFaces(PolyhedronPtr p, std::vector<double> & coords, std::ve
 		while(++h!=pFacet->facet_begin());
 	}
 }
+
+void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr model)
+{
+	model->compute_normals();
+	target->compute_normals();
+	
+	unionSegments(v);
+	
+	softICPController icp(model,target);
+	
+	double R = 0.6;
+	unsigned int elasticity = 1;
+	
+	icp.snapRegions(R,elasticity);
+	
+	v->recreateListsAndUpdateGL();
+}
+
 
 void test_softICP_SVD()
 {

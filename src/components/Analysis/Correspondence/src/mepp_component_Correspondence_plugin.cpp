@@ -861,15 +861,15 @@ void mepp_component_Correspondence_plugin::OnUnion()
 	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
 	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
 	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
-	int cMesh = mainViewer->getScenePtr()->get_current_polyhedron();
+	//int cMesh = mainViewer->getScenePtr()->get_polyhedron(1);
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
-	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(cMesh);
+	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
 		
-	mainSegCtr.sewSegments(mainViewer,partPoly,mainPoly);
+	//mainSegCtr.sewSegments(mainViewer,partPoly,mainPoly);
+	
+	mainSegCtr.softICP(mainViewer,partPoly,mainPoly);
+	
 	mainViewer->recreateListsAndUpdateGL();
-	
-	
-	
 }
 
 void mepp_component_Correspondence_plugin::OnAddSegment()
@@ -885,7 +885,7 @@ void mepp_component_Correspondence_plugin::OnAddSegment()
 	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPolyhedron);
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
 	
-	std::cout << "After getting mainViewer " << std::endl;
+	//std::cout << "After getting mainViewer " << std::endl;
 	
 	//////////////////////////////////////////////////////////////////////////////////////////
 	//// 
