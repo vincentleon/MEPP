@@ -19,7 +19,26 @@
 #include "Correspondence_Component.h"
 #include "SegmentController.h"
 
+#include <stack>
+#include <ctime>
+
+#include <dirent.h>
+
 typedef boost::shared_ptr<Correspondence_Component> Correspondence_ComponentPtr;
+
+/*std::stack<clock_t> timer_stack;
+
+void timer_tic() {
+  timer_stack.push(clock());
+}
+
+void timer_toc() {
+    std::cout << "Time elapsed: "
+              << ((double)(clock() - timer_stack.top())) / CLOCKS_PER_SEC
+              << std::endl;
+    timer_stack.pop();
+}*/
+
 
 /**
  \class	mepp_component_Correspondence_plugin

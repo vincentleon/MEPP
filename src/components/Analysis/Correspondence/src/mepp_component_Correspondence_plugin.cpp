@@ -16,23 +16,6 @@
 
 #include <QFileDialog>
 
-#include <stack>
-#include <ctime>
-
-#include <dirent.h>
-
-std::stack<clock_t> tictoc_stack;
-
-void tic() {
-    tictoc_stack.push(clock());
-}
-
-void toc() {
-    std::cout << "Time elapsed: "
-              << ((double)(clock() - tictoc_stack.top())) / CLOCKS_PER_SEC
-              << std::endl;
-    tictoc_stack.pop();
-}
 
 
 void mepp_component_Correspondence_plugin::post_draw()
@@ -195,9 +178,9 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 				component_ptr->initializeEllipsoid(polyhedron_ptr);
 				
 				std::cout << "Compute Ellipse Parameters" << std::endl;
-				tic();
+				//timer_tic();
 				component_ptr->computeEllipseParameters(polyhedron_ptr);
-				toc();
+				//timer_toc();
 				
 				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
 				
@@ -858,18 +841,28 @@ void mepp_component_Correspondence_plugin::OnUnion()
 	///	Get the Main viewer and fusion all the parts in it
 	///
 	//////////////////////////////////////////////////////////////
+	SettingsDialog dial;
+	double elasticity = 1/500.0;
+	double regionSize = 0.5;
+	int itermax = 5;
+	if (dial.exec() == QDialog::Accepted)
+	{
+		elasticity = dial.doubleSpinBox->value();
+		regionSize = dial.doubleSpinBox_2->value();
+		itermax = dial.spinBox_2->value();
+	
+	//std::cout << " Elasticity :" << elasticity << std::endl;
+		
 	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
 	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
 	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
-	//int cMesh = mainViewer->getScenePtr()->get_polyhedron(1);
+
 	SegmentController & mainSegCtr = mainCorres->m_segCtr;
 	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
-		
-	//mainSegCtr.sewSegments(mainViewer,partPoly,mainPoly);
 	
-	mainSegCtr.softICP(mainViewer,partPoly,mainPoly);
-	
+	mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);
 	mainViewer->recreateListsAndUpdateGL();
+	}
 }
 
 void mepp_component_Correspondence_plugin::OnAddSegment()
@@ -955,19 +948,19 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 				
 				component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));
 				std::cout << "Learn SVM : " << std::endl;
-				tic();
+				//timer_tic();
 				component_ptr->learnSVMClassifier(polyhedron_ptr);
-				toc();
+				//timer_toc();
 				
 				component_ptr->initializeEllipsoid(polyhedron_ptr);
 				std::cout << "Ellipse parameters : " << std::endl;
-				tic();
+				//timer_tic();
 				component_ptr->computeEllipseParameters(polyhedron_ptr);
-				toc();
+				//timer_toc();
 				std::cout << "compareToEllipse : " << std::endl;
-				tic();
+				//timer_tic();
 				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
-				toc();
+				//timer_toc();
 				mw->statusBar()->showMessage(tr("Correspondence is done"));
 
 				component_ptr->set_init(2);
@@ -992,10 +985,10 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 						
 						svmcomponent_ptr->readDescriptor(polyhedron_copy_ptr,meshIDString.substr(0,posB));
 						std::cout << "compareToSVM : " << std::endl;
-						tic();
+						//timer_tic();
 						svmcomponent_ptr->setSVM(component_ptr->getSVM());
 						svmcomponent_ptr->compareDescriptorToSVM(polyhedron_copy_ptr);
-						toc();
+						//timer_toc();
 						viewerI->recreateListsAndUpdateGL();
 					}	
 				}

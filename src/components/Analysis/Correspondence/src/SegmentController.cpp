@@ -1169,9 +1169,9 @@ void SegmentController::sewSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 	model->compute_normals();
 	target->compute_normals();
 	
-	softICPController icp(model,target);
+	//softICPController icp(model,target);
 	//icp.buildTreeStructure(2);
-	icp.snapRegions(0.3,1);
+	//icp.snapRegions(0.3,1);
 	
 	
 	//test_softICP_SVD();
@@ -1741,7 +1741,7 @@ void collectVertsAndFaces(PolyhedronPtr p, std::vector<double> & coords, std::ve
 	}
 }
 
-void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr model)
+void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr model, double elasticity, double regionSize, int itermax)
 {
 	model->compute_normals();
 	target->compute_normals();
@@ -1750,10 +1750,10 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 	
 	softICPController icp(model,target);
 	
-	double R = 0.6;
-	unsigned int elasticity = 1;
-	
-	icp.snapRegions(R,elasticity);
+	//double R = 0.6;
+	//unsigned int elasticity = 1;
+	//std::cout << " Elasticity :" << elasticity << std::endl;
+	icp.snapRegions(regionSize,elasticity,itermax,5);
 	
 	v->recreateListsAndUpdateGL();
 }

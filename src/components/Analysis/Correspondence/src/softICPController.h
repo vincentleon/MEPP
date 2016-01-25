@@ -4,6 +4,7 @@
 #include "Correspondence_Polyhedron.h"
 #include <set>
 #include "../components/Analysis/Correspondence/src/SegmentController.h"
+#include "../components/Analysis/Correspondence/src/mepp_component_Correspondence_plugin.hxx"
 
 #include "CGAL/Linear_algebraCd.h"
 
@@ -26,6 +27,21 @@ public:
 	std::map<Vertex_handle,int > m_cluster;
 	
 	myMatrix m_distanceMatrix;
+	
+	std::vector<deformationNode *> m_closest; // the closest nodes
+	
+	std::vector<double> m_distClosest; // the distance to the closest nodes
+	
+	int m_level; // level in the tree
+};
+
+typedef std::vector<double>::const_iterator myiter;
+
+struct ordering {
+	bool operator ()(std::pair<deformationNode*, double> const& a, std::pair<deformationNode*, double> const& b)
+	{
+		return (a.second) < (b.second);
+	}
 };
 
 class pointTransformation
@@ -44,13 +60,25 @@ public:
 	
 	void buildTreeStructure(const int sizeOfTree, double R=0.1, double squared_euclidean_radius=0.05);
 
-	void snapRegions(double R, unsigned elasticity);
+	void snapRegions(double R, double elasticity, int itermax=5, int treeDepth=2);
 	
 	pointTransformation computeTransformation(std::vector<Vertex_handle> & N, std::vector<Vertex_handle> & phiN);
 
 	void applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, const int itermax);
 	
+	
 private:
+	
+	
+	std::map< std::pair<Vertex_handle,Vertex_handle>, double> m_distanceMemo;
+	
+	bool m_stop_for_debug;
+	
+	std::vector< std::vector<deformationNode*> > m_levelNodes1;
+	std::vector< std::vector<deformationNode*> > m_levelNodes2;
+	
+	std::vector < Matrix * > m_distanceMatrices1;
+	std::vector < Matrix * > m_distanceMatrices2;	
 	
 	std::map<Vertex_handle,Vertex_handle> m_Phi; // the snapping Region correspondence
 	std::map<Vertex_handle,double> m_distToLoop;
@@ -61,11 +89,17 @@ private:
 	deformationNode m_treeStructure1;
 	deformationNode m_treeStructure2;
 	
-	void getSnappingRegion(double R, double squared_euclidean_radius);
+	double getDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
+	
+	void getSnappingRegionAABB();
+	
+	void getSnappingRegionKdTree();
+	
+	void getSnappingRegionOld(double R, double squared_euclidean_radius);
 	
 	void computeSnappingRegionCorrespondence(bool order);
 	
-	void kMedoidMain(deformationNode * root, int k);
+	void kMedoidMain(deformationNode * root, int k=4, int clusterIter=3);
 	
 	void computeMatrixDistance(deformationNode * root);
 	
@@ -79,7 +113,8 @@ private:
 	
 	void hierarchicalBuild(deformationNode * root, int sizeOfTree, int level,int k);
 	
-	std::vector<Vertex_handle> getNeighborhood(Vertex_handle p, double R, unsigned iter, unsigned elasticity, bool order);
+	std::vector<Vertex_handle> getNeighborhoodOld(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
+	std::vector<Vertex_handle> getNeighborhood(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
 	
 	std::vector<Vertex_handle> getCorrespondingNeighborhood( std::vector<Vertex_handle> & N);
 	
@@ -88,6 +123,16 @@ private:
 	void displayNode( deformationNode * root);
 	
 	void subdivideLeaves( deformationNode * root);
+	
+	void computeClosest(  deformationNode * root, int m, std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices  );
+	
+	void storeNodeLevel( deformationNode * root, int level, std::vector< std::vector<deformationNode*> > & levelNodes);
+	
+	void fixBorder();
+	
+	void initClosest(std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices, int m);
+	
+	
 	
 };
 

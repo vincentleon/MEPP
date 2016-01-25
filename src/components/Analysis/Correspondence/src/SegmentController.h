@@ -90,7 +90,7 @@ public:
 	
 	void sewSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model);
 	
-	void softICP(Viewer * v, PolyhedronPtr target, PolyhedronPtr model);
+	void softICP(Viewer * v, PolyhedronPtr target, PolyhedronPtr model, double elasticity, double regionSize, int itermax);
 	
 	void fuseMeshes(Viewer *v, PolyhedronPtr target, PolyhedronPtr model);
 	
