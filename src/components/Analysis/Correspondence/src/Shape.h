@@ -128,11 +128,12 @@ class Shape
 	std::ifstream parts;
 	std::stringstream ssParts;
 	ssParts<<meshDir<<"/"<<meshID<<".parts";
+	
 	parts.open(ssParts.str().c_str());
 	if(parts)
 	{
 		std::string line;
-		while(getline(labels,line))
+		while(getline(parts,line))
 		{
 			m_faceSegments.push_back(atoi(line.c_str()));
 		}

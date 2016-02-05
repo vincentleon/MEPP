@@ -422,7 +422,10 @@ void SegmentController::cutSegments()
 
 PolyhedronPtr SegmentController::fillHoles(PolyhedronPtr p)
 {
-	p->keep_largest_connected_components(1);
+	//p->keep_largest_connected_components(1);
+	isolatedVertices_remover<HalfedgeDS> verticeRemover;
+	p->delegate(verticeRemover);
+	
 	simplePolyhedron  * poly = convertToSimplePolyhedron(p);
 	/*
 	unsigned nb_holes = 0;
@@ -1463,11 +1466,10 @@ void SegmentController::fitSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 
 void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr t,int sourceFrameID, int targetFrameID)
 {
-	//fillHoles(s);
-	//fillHoles(t);
+	isolatedVertices_remover<HalfedgeDS> verticeRemover;
+	s->delegate(verticeRemover);
+	t->delegate(verticeRemover);
 	
-	//s->keep_largest_connected_components(1);
-	//t->keep_largest_connected_components(1);
 	unsigned sizeS = s->size_of_vertices();
 	unsigned sizeT = t->size_of_vertices();
 	colorMesh(s,1,1,0);
@@ -1500,14 +1502,9 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 	Matrix R = Matrix::eye(3);
 	Matrix P(3,1);
 	IcpPointToPoint icp2(S,sizeS,3);
-	//IcpPointToPlane icp(S,sizeS,3);
-	//icp.fit(T,sizeT,R,P,-1);
+	
 	icp2.fit(T,sizeT,R,P,-1);
-	
-	std::cout << endl << "Transformation results:" << endl;
-	std::cout << "R:" << endl << R << endl << endl;
-	std::cout << "t:" << endl << P << endl << endl;
-	
+
 	qglviewer::Quaternion Q;
 	double rData[3][3];
 	for(unsigned i=0;i<3;++i)
@@ -1518,9 +1515,6 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 		}
 	}
 	Q.setFromRotationMatrix(rData);
-
-	//v->frame(targetFrameID)->translate(P.val[0][0],P.val[1][0],P.val[2][0]);
-	//v->frame(targetFrameID)->rotate(Q);
 	
 	v->frame(targetFrameID)->setTranslation(P.val[0][0],P.val[1][0],P.val[2][0]);
 	v->frame(targetFrameID)->setRotation(Q);
@@ -1750,11 +1744,13 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 	
 	softICPController icp(model,target);
 	
-	//double R = 0.6;
-	//unsigned int elasticity = 1;
-	//std::cout << " Elasticity :" << elasticity << std::endl;
 	icp.snapRegions(regionSize,elasticity,itermax,5);
 	
+	PolyhedronPtr result = icp.remesh();
+	
+	v->getScenePtr()->add_polyhedron(result);
+	
+	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();
 }
 

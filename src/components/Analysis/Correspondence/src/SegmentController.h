@@ -156,6 +156,24 @@ public:
     }
 };
 
+template<class HDS>
+class isolatedVertices_remover : public CGAL::Modifier_base<HDS> {
+public:
+	void operator()(HDS& hds)
+	{
+		for(auto pVertex = hds.vertices_begin();
+		    pVertex!= hds.vertices_end();
+			++pVertex)
+		{
+			if(pVertex->halfedge() == 0)
+			{
+				hds.vertices_erase(pVertex);
+			}
+		}
+	}
+};
+
+
 void visitVertexSelection(Halfedge_around_vertex_circulator h,
 			  std::map<Vertex_iterator,bool> & isSelected, 
 			  std::map<Vertex_iterator,int> & cc, int nbcc,

@@ -170,6 +170,12 @@ class mepp_component_Correspondence_plugin :
 				connect(actionLoadDescriptor, SIGNAL(triggered()),this,SLOT(OnLoadDescriptor()));
 			}
 			
+			actionCleanData = new QAction(tr("Clean Data"),this);
+			if( actionCleanData )
+			{
+				connect(actionCleanData, SIGNAL(triggered()),this,SLOT(OnCleanData()));
+			}
+			
 		}
 
 		QList<QAction*> actions() const
@@ -195,7 +201,9 @@ class mepp_component_Correspondence_plugin :
 				<< actionSelBorder
 				<< actionMoveBorder
 				<< actionSaveParts
-				<< actionLoadDescriptor;
+				<< actionLoadDescriptor
+				<< NULL
+				<<actionCleanData;
 		}
 
 		virtual void pre_draw();
@@ -240,6 +248,7 @@ class mepp_component_Correspondence_plugin :
 		void OnMoveBorder();
 		void OnSaveParts();
 		void OnLoadDescriptor();
+		void OnCleanData();
 		
   private:
     int m_currentLabel;
@@ -259,9 +268,14 @@ class mepp_component_Correspondence_plugin :
     QAction *actionMoveBorder;
     QAction *actionSaveParts;
     QAction *actionLoadDescriptor;
-    
+    QAction *actionCleanData;
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
+    
+    std::vector<std::string> getFileList(std::string message ="choose directory");
+    
+    
+    
 };
 
 #endif

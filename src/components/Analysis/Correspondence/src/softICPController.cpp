@@ -2,17 +2,25 @@
 #include <CGAL/Kernel/interface_macros.h>
 #include <CGAL/Sphere_3.h>
 #include "time.h"
+#include <list>
 #include "omp.h"
 
-//INCLUDE AABB Tree
+// For quick distance computation (Snapping region)
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_triangle_primitive.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_polyhedron_triangle_primitive.h>
 
-//INCLUDE KdTree
-#include <CGAL/Search_traits_vertex_handle_3.h>
-#include <CGAL/Orthogonal_k_neighbor_search.h>
+// For re-meshing ( snapping region )
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Delaunay_triangulation_3.h>
+#include <CGAL/Complex_2_in_triangulation_3.h>
+
+#include <CGAL/convex_hull_3_to_polyhedron_3.h>
+
+#include <CGAL/Advancing_front_surface_reconstruction.h>
+
+#include <CGAL/Subdivision_method_3.h>
 
 typedef CGAL::Simple_cartesian<double> AABB_Kernel;
 typedef CGAL::AABB_polyhedron_triangle_primitive<AABB_Kernel,Polyhedron> AABB_Primitive;
@@ -21,12 +29,61 @@ typedef CGAL::AABB_tree<AABB_Traits> AABB_Tree;
 typedef AABB_Tree::Object_and_primitive_id Object_and_primitive_id;
 typedef AABB_Tree::Point_and_primitive_id Point_and_primitive_id;
 
-//typedef CGAL::Search_traits_vertex_handle_3<Vertex_handle> Traits;
-/*
+typedef CGAL::Exact_predicates_inexact_constructions_kernel delaunayKernel;
+typedef CGAL::Triangulation_3<AABB_Kernel>      Triangulation;
+typedef Triangulation::Cell_handle    Cell_handle;
+typedef Triangulation::Vertex_handle  VoronoiVertex_handle;
+typedef Triangulation::Locate_type    Locate_type;
+typedef Triangulation::Point          Point;
+typedef AABB_Kernel::Triangle_3 Triangle;
 
-typedef CGAL::Orthogonal_k_neighbor_search<Traits> K_neighbor_search;
-typedef K_neighbor_search::Tree Tree;
-*/
+typedef CGAL::cpp11::array<std::size_t,3> RFacet;
+
+
+struct Perimeter {
+  double bound;
+  Perimeter(double bound)
+    : bound(bound)
+  {}
+  // The point type that will be injected here will be
+  // CGAL::Exact_predicates_inexact_constructions_kernel::Point_3
+  template <typename Point>
+  bool operator()(const Point& p, const Point& q, const Point& r) const
+  {
+    // bound == 0 is better than bound < infinity
+    // as it avoids the distance computations
+    if(bound == 0){
+      return false;
+    }
+    double d  = sqrt(squared_distance(p,q));
+    if(d>bound) return true;
+    d += sqrt(squared_distance(p,r)) ;
+    if(d>bound) return true;
+    d+= sqrt(squared_distance(q,r));
+    return d>bound;
+  }
+};
+
+struct DistanceSurface {
+	AABB_Tree & m_tree;
+	std::set<Point3d> & m_borders;
+	DistanceSurface(AABB_Tree & tree, std::set<Point3d> & borders) : m_tree(tree), m_borders(borders){}
+	
+	
+	template <typename Point>
+	bool operator()(const Point& p, const Point& q, const Point& r) const
+	{	
+		
+		Point3d pp(p.x(),p.y(),p.z());
+		Point3d qq(q.x(),q.y(),q.z());
+		Point3d rr(r.x(),r.y(),r.z());
+		
+		
+		return m_borders.count(pp) && m_borders.count(qq) && m_borders.count(rr);
+	}
+	
+};
+
 
 std::stack<clock_t> timer_stack;
 
@@ -99,7 +156,7 @@ void softICPController::computeSnappingRegionCorrespondence(bool order)
 		{
 			//double dist = computePhiDistance((*it),(*c));
 			//double dist = computePhiDistance((*it),(*c),0.7,0.3,0.0);
-			double dist = getDistance((*it),(*c),0.7,0.3,0.0);
+			double dist = computePhiDistance((*it),(*c),0.5,0.1,0.4);
 			if(dist < distMin)
 			{
 				bestCorres = *c;
@@ -124,7 +181,8 @@ void softICPController::computeClosest( deformationNode * root, int m, std::vect
 			for(unsigned q=0;q<p;++q)
 			{
 				deformationNode* nodeQ = levelNodes[l][q];
-				double dist = computePhiDistance(nodeP->m_rep,nodeQ->m_rep,1.0,0.0,0.0);
+					double dist = computePhiDistance(nodeP->m_rep,nodeQ->m_rep,1.0,0.0,0.0);
+				//double dist = computePhiDistance(nodeP->m_rep,nodeQ->m_rep,0.5,0.1,0.4);
 				mat->val[p][q] = dist;
 				mat->val[q][p] = dist;
 			}
@@ -196,13 +254,15 @@ double softICPController::computeDelta(bool order)
 void softICPController::buildTreeStructure(const int sizeOfTree,double R, double squared_euclidean_radius)
 {
 	// Identify the snapping region on the two meshes
-	std::cout << "\n\t\tget Snapping region ";
-	timer_tic();
-	getSnappingRegionOld(R,squared_euclidean_radius);
-	timer_toc();
+	//std::cout << "\n\t\tget Snapping region ";
+	//timer_tic();
+	//getSnappingRegionOld(R,squared_euclidean_radius);
+	getSnappingRegionAABB();
+	//timer_toc();
+	R = m_R;
 	
-	std::cout << "\t\thierarchicalBuild " << std::endl;
-	timer_tic();
+	//std::cout << "\t\thierarchicalBuild " << std::endl;
+	//timer_tic();
 	//#pragma omp parallel sections
 	//{
 	//	#pragma omp section
@@ -214,7 +274,7 @@ void softICPController::buildTreeStructure(const int sizeOfTree,double R, double
 			hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
 	//	}
 	//}
-	timer_toc();
+	//timer_toc();
 	
 	// Init. root nodes properly
 	m_treeStructure1.m_parent = NULL;
@@ -304,57 +364,9 @@ void softICPController::colorCluster(deformationNode* root)
 	}
 }
 
-/*void softICPController::getSnappingRegionKdTree()
-{
-	// First, normalize boundary edges order
-	m_polyhedron1->normalize_border();
-	m_polyhedron2->normalize_border();
-	
-	// Then we find the two border halfedges that are the closest to each other
-	double distMin = std::numeric_limits<double>::max();
-	Halfedge_handle border1,border2;
-	
-	//#pragma omp parallel for private(b1)
-	for(auto b1 = m_polyhedron1->border_halfedges_begin(); b1!=m_polyhedron1->halfedges_end();++b1)
-	{
-		b1->vertex()->color(1,0,0);
-		Point3d p1 = b1->vertex()->point();
-		Halfedge_iterator closestToP1;
-		double distMinToP1 = std::numeric_limits<double>::max();
-		for(auto b2 = m_polyhedron2->border_halfedges_begin(); b2!=m_polyhedron2->halfedges_end();++b2)
-		{
-			b2->vertex()->color(0,0,1);
-			Point3d p2 = b2->vertex()->point();
-			double dist = CGAL::squared_distance(p1,p2);
-			if(dist<distMinToP1)
-			{
-				distMinToP1 = dist;
-				closestToP1 = b2;
-			}
-		}
-		if(distMinToP1<distMin)
-		{
-			border1 = b1;
-			border2 = closestToP1;
-			distMin = distMinToP1;
-		}
-	}
-	// Border 1 and border2 are on the two closest boundary loops
-	
-	std::vector<Vertex_handle> closestToB1;
-	std::vector<Vertex_handle> closestToB2;
-	
-	std::vector<Vertex_handle> loop1;
-	std::vector<Vertex_handle> loop2;
-	
-	Tree tree1(m_polyhedron1->vertices_begin(),m_polyhedron1->vertices_end());
-	Tree tree2(m_polyhedron2->vertices_begin(),m_polyhedron2->vertices_end());
-	
-	
-}*/
-
 void softICPController::getSnappingRegionAABB()
 {
+	
 	// First, normalize boundary edges order
 	m_polyhedron1->normalize_border();
 	m_polyhedron2->normalize_border();
@@ -366,13 +378,13 @@ void softICPController::getSnappingRegionAABB()
 	//#pragma omp parallel for private(b1)
 	for(auto b1 = m_polyhedron1->border_halfedges_begin(); b1!=m_polyhedron1->halfedges_end();++b1)
 	{
-		b1->vertex()->color(1,0,0);
+		//b1->vertex()->color(1,0,0);
 		Point3d p1 = b1->vertex()->point();
 		Halfedge_iterator closestToP1;
 		double distMinToP1 = std::numeric_limits<double>::max();
 		for(auto b2 = m_polyhedron2->border_halfedges_begin(); b2!=m_polyhedron2->halfedges_end();++b2)
 		{
-			b2->vertex()->color(0,0,1);
+			//b2->vertex()->color(0,0,1);
 			Point3d p2 = b2->vertex()->point();
 			double dist = CGAL::squared_distance(p1,p2);
 			if(dist<distMinToP1)
@@ -403,10 +415,10 @@ void softICPController::getSnappingRegionAABB()
 	tree2.accelerate_distance_queries();
 	
 	// Find the set of closest points to the other shapes B-loop
-	
 	Halfedge_handle it = border1;
 	do{
 		loop1.push_back(it->vertex());
+		m_loop1.push_back(it);
 		// find the vertex closest to it->vertex() in m_polyhedron2
 		Point_and_primitive_id pp = tree2.closest_point_and_primitive(it->vertex()->point());
 		Facet_iterator f_nearest = pp.second;
@@ -425,7 +437,7 @@ void softICPController::getSnappingRegionAABB()
 			
 		}
 		while(++hC!=it->vertex()->vertex_begin());
-		it->vertex()->color(1,1,0);
+		
 		it = next;
 	}
 	while(it!=border1);
@@ -433,6 +445,7 @@ void softICPController::getSnappingRegionAABB()
 	it = border2;
 	do{
 		loop2.push_back(it->vertex());
+		m_loop2.push_back(it);
 		// find the vertex closest to it->vertex() in m_polyhedron2
 		Point_and_primitive_id pp = tree1.closest_point_and_primitive(it->vertex()->point());
 		Facet_iterator f_nearest = pp.second;
@@ -451,25 +464,93 @@ void softICPController::getSnappingRegionAABB()
 			
 		}
 		while(++hC!=it->vertex()->vertex_begin());
-		it->vertex()->color(1,1,0);
 		it = next;
 	}
-	while(it!=border1);	
+	while(it!=border2);
 	
 	// compute for each point in the two sets, compute the distance to the other shapes b-loop
 	double R = 0.0;
 	for(int i=0;i<closestToB2.size();++i)
-	{
-		for(auto b=loop1.begin();b!=loop1.end();++b)
+	{	
+		Point3d p = closestToB2[i]->point();
+		double closest = std::numeric_limits<double>::max();
+		for(int b=0;b<loop1.size();++b)
 		{
-			
+			Point3d q = loop1[b]->point();
+			double dist = CGAL::squared_distance(p,q);
+			if(dist<closest)
+			{
+				closest = dist;
+			}
 		}
+		if(closest>R){R = closest;}
 	}
 	for(int i=0;i<closestToB1.size();++i)
 	{
-		
+		Point3d p = closestToB1[i]->point();
+		double closest = std::numeric_limits<double>::max();
+		for(int b=0;b<loop2.size();++b)
+		{
+			Point3d q = loop2[b]->point();
+			double dist = CGAL::squared_distance(p,q);
+			if(dist<closest)
+			{
+				closest = dist;
+			}
+		}
+		if(closest>R){R = closest;}
+	}
+	m_R = sqrt(R);
+	
+	// R is the maximum of these distances
+	// The SR is the submesh within R distance to the boundary loop
+	for(auto pVertex = m_polyhedron1->vertices_begin();
+	    pVertex != m_polyhedron1->vertices_end();
+		++pVertex)
+	{
+		Point3d p = pVertex->point();
+		double distToLoop = std::numeric_limits<double>::max();
+		for(auto b=loop1.begin();b!=loop1.end();++b)
+		{
+			double dist = CGAL::squared_distance(p,(*b)->point());
+			if(dist<distToLoop)
+			{
+				distToLoop = dist;
+			}
+		}
+		distToLoop = sqrt(distToLoop);
+		if(distToLoop < m_R)
+		{
+			//pVertex->color(1.0,1.0,0.0);
+			m_distToLoop[pVertex] = distToLoop;
+			m_treeStructure1.m_vertices.insert(pVertex);
+			m_isSnappingRegion[pVertex] = true;
+		}
 	}
 	
+	for(auto pVertex = m_polyhedron2->vertices_begin();
+	    pVertex != m_polyhedron2->vertices_end();
+		++pVertex)
+	{
+		Point3d p = pVertex->point();
+		double distToLoop = std::numeric_limits<double>::max();
+		for(auto b=loop2.begin();b!=loop2.end();++b)
+		{
+			double dist = CGAL::squared_distance(p,(*b)->point());
+			if(dist<distToLoop)
+			{
+				distToLoop = dist;
+			}
+		}
+		distToLoop = sqrt(distToLoop);
+		if(distToLoop < m_R)
+		{
+			//pVertex->color(1.0,1.0,0.0);
+			m_distToLoop[pVertex] = distToLoop;
+			m_treeStructure2.m_vertices.insert(pVertex);
+			m_isSnappingRegion[pVertex] = true;
+		}
+	}
 }
 
 
@@ -559,7 +640,7 @@ void softICPController::getSnappingRegionOld(double R, double squared_euclidean_
 				if(distToLoop<R)
 				{
 					m_treeStructure1.m_vertices.insert(pHalfedge->vertex());
-					pHalfedge->vertex()->color(1,1,0);
+					//pHalfedge->vertex()->color(1,1,0);
 					if(!m_distToLoop.count(pHalfedge->vertex()))
 					{
 						m_distToLoop[pHalfedge->vertex()] = distToLoop;
@@ -586,7 +667,7 @@ void softICPController::getSnappingRegionOld(double R, double squared_euclidean_
 				
 				it = next;
 				}
-				while(it!=border1);
+			while(it!=border1);
 		//}
 	}
 	////////////////////////////////////////////////////////////////////
@@ -613,7 +694,7 @@ void softICPController::getSnappingRegionOld(double R, double squared_euclidean_
 				if(distToLoop<R)
 				{
 					m_treeStructure2.m_vertices.insert(pHalfedge->vertex());
-					pHalfedge->vertex()->color(1,1,0);
+					//pHalfedge->vertex()->color(1,1,0);
 					if(!m_distToLoop.count(pHalfedge->vertex()))
 					{
 						m_distToLoop[pHalfedge->vertex()] = distToLoop;
@@ -664,7 +745,7 @@ void softICPController::cluster(deformationNode* root)
 			
 			//double dist = computePhiDistance(rep,*v);
 			//double dist = computePhiDistance(rep,*v,0.7,0.3,0.0);
-			double dist = getDistance(rep,(*v),0.7,0.3,0.0);
+			double dist = computePhiDistance(rep,*v,0.5,0.1,0.4);
 			if(dist<distMin)
 			{
 				distMin = dist;
@@ -713,7 +794,7 @@ void softICPController::updateRep(deformationNode* root)
 				{
 					//double dist = computePhiDistance((*v),(*g));
 					//double dist = computePhiDistance(*v,*g,0.7,0.3,0.0);
-					double dist = getDistance(*v,*g,0.7,0.3,0.0);
+					double dist = computePhiDistance(*v,*g,0.5,0.1,0.4);
 					e += dist*dist;
 				}
 			}
@@ -794,7 +875,8 @@ void softICPController::computeMatrixDistance(deformationNode* root)
 		for(unsigned j=0;j<i;++j)
 		{
 			Vertex_handle rep2 = root->m_childrenNodes[j]->m_rep;
-			double dist = computePhiDistance(rep1,rep2,0.7,0.3,0.0);
+			//double dist = computePhiDistance(rep1,rep2,0.7,0.3,0.0);
+			double dist = computePhiDistance(rep1,rep2,0.5,0.1,0.4);
 			m[i][j] = dist;
 			m[j][i] = dist;
 		}
@@ -806,31 +888,40 @@ void softICPController::computeMatrixDistance(deformationNode* root)
 
 void softICPController::snapRegions(double R, double elasticity, int itermax, int treeDepth)
 {
+	std::cout << "Total time : ";
+	timer_tic();
 	bool convergenceCriterion = false;
 	bool order = false;
 	int iter = 1;
 
-	std::cout << "omp_get_max_threads(): " << omp_get_max_threads() << std::endl;
+	//std::cout << "omp_get_max_threads(): " << omp_get_max_threads() << std::endl;
 	
 	// Select snapping region and create patches on surface
-	std::cout << "buildTreeStructure : "; 
-	timer_tic();
+	//std::cout << "buildTreeStructure : "; 
+	//timer_tic();
 	buildTreeStructure(treeDepth,R);
-	timer_toc();
+	//timer_toc();
 	
-	std::cout << "init closest patches";
-	timer_tic();
+	R = m_R;
+	//std::cout << "R : " << m_R;
+	
+	//std::cout << "init closest patches";
+	//timer_tic();
 	storeNodeLevel(&m_treeStructure1,0,m_levelNodes1);
 	storeNodeLevel(&m_treeStructure2,0,m_levelNodes2);
 	computeClosest(&m_treeStructure1,4,m_levelNodes1,m_distanceMatrices1);
 	computeClosest(&m_treeStructure1,4,m_levelNodes2,m_distanceMatrices2);
 	initClosest(m_levelNodes1,m_distanceMatrices1,4);
 	initClosest(m_levelNodes2,m_distanceMatrices2,4);
-	timer_toc();
+	//timer_toc();
 	
-	std::cout << "convergence loop";
-	timer_tic();
-	while(!convergenceCriterion)
+	
+	
+	//std::cout << "convergence loop";
+	//timer_tic();
+	
+	double delta = 0.0;
+	while(!convergenceCriterion && !m_stop_for_debug)
 	{
 		// swap meshes at each iteration
 		order = !order; 
@@ -840,88 +931,77 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 		
 		convergenceCriterion = (iter == itermax);
 		
+		
+		
 		// find correspondence between the 2 snapping regions
 		computeSnappingRegionCorrespondence(order);
-		
-		deformationNode * treeStructure;
-		if(order)
+		//double oldDelta = delta;
+		/*delta = computeDelta(order);
+		if( delta > oldDelta && iter!=1)
 		{
-			treeStructure = &m_treeStructure1;
-		}
-		else
+			m_stop_for_debug = true;
+		}*/
+		if(!m_stop_for_debug)
 		{
-			treeStructure = &m_treeStructure2;
-			iter++;
-		}
-		
-		// Compute a transformation for each point
-		unsigned int nbP = 0;
-		std::vector <pointTransformation> transf;
-		//#pragma omp parallel for private(it,nbP,m_Phi) default(none) shared(transf)
-		for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && !m_stop_for_debug;++it)
-		{
-			Vertex_handle pVertex = *it;
-			// Get neighborhood N around pVertex
-			std::vector<Vertex_handle> N = getNeighborhood(pVertex,R,iter,itermax,elasticity,order);
-			// Get corresponding neighborhood
-			std::vector<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
-			// Compute and store transformation
-			pointTransformation ti = computeTransformation(N,phiN);
-			
-			/*double li = iter/(double)itermax;
-			ti.T = li*ti.T;
-			ti.Q.setAxisAngle(ti.Q.axis(),li*ti.Q.angle());
-			
-			Point3d pos = pVertex->point();
-			qglviewer::Vec V = ti.Q * qglviewer::Vec(pos.x(),pos.y(),pos.z()) + ti.T;
-			pos = CGAL::ORIGIN + Vector(V[0],V[1],V[2]);
-			
-			double dist = sqrt(CGAL::squared_distance(pos,m_Phi[pVertex]->point()));
-			if(dist > 0.5)
+			deformationNode * treeStructure;
+			if(order)
 			{
-				std::cout << ti.T << std::endl;
-				std::cout << ti.Q.angle()<< " " << ti.Q.axis() << std::endl;
-				//std::cout << "size of neighborhood" << N.size() << std::endl;
-				m_stop_for_debug = true;
-				for(unsigned v=0; v < N.size(); ++v)
-				{
-					N[v]->color(0,1,1);
-					m_Phi[N[v]]->color(0,0,0);
-				}
-				pVertex->color(1,0,1);
-				m_Phi[pVertex]->color(0,1,0);
-			}*/
+				treeStructure = &m_treeStructure1;
+			}
+			else
+			{
+				treeStructure = &m_treeStructure2;
+				iter++;
+			}
 			
-			transf.push_back(ti);
-			nbP++;
+			// Compute a transformation for each point
+			unsigned int nbP = 0;
+			std::vector <pointTransformation> transf;
+			//#pragma omp parallel for private(it,nbP,m_Phi) default(none) shared(transf)
+			for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && !m_stop_for_debug;++it)
+			{
+				Vertex_handle pVertex = *it;
+				// Get neighborhood N around pVertex
+				std::vector<Vertex_handle> N = getNeighborhood(pVertex,R,iter,itermax,elasticity,order);
+				// Get corresponding neighborhood
+				std::vector<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
+				// Compute and store transformation
+				pointTransformation ti = computeTransformation(N,phiN);
+				
+				transf.push_back(ti);
+				nbP++;
+			}
+			
+			// Apply the transformation for each point, but scale it (iter/itermax)
+			int i=0;
+			//#pragma omp parallel for private(i,it) default(none) shared(transf)
+			int sizeS = treeStructure->m_vertices.size();
+			for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && (i<nbP) ;++it)
+			//for(i=0;i<sizeS;++i)
+			{
+				Vertex_handle pVertex = *it;
+				applyTransformation(pVertex,transf[i],iter,itermax);
+				i++;
+			}
 		}
-		
-		// Apply the transformation for each point, but scale it (iter/itermax)
-		int i=0;
-		//#pragma omp parallel for private(i,it) default(none) shared(transf)
-		int sizeS = treeStructure->m_vertices.size();
-		for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && (i<nbP) ;++it)
-		//for(i=0;i<sizeS;++i)
-		{
-			Vertex_handle pVertex = *it;
-			applyTransformation(pVertex,transf[i],iter,itermax);
-			i++;
-		}	
 		//if(m_stop_for_debug)
 		//{
 		//	break;
 		//}
 	}
-	timer_toc();
-	std::cout << "fixBorder";
-	timer_tic();
+	//timer_toc();
+	//std::cout << "fixBorder";
+	//timer_tic();
 	fixBorder();
-	timer_toc();			
+	for(unsigned s=0;s<4;++s){gaussianSmooth();}
+ 	timer_toc();	
+	//std::cout << "#of iterations : " << iter << "/" << itermax << std::endl;
 }
 																																
 void softICPController::applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, int itermax)
 {
-	double li = iter/(double)itermax;
+	//double li = iter/(double)itermax;
+	double li = 1.0;
 	ti.T = li*ti.T;
 	ti.Q.setAxisAngle(ti.Q.axis(),li*ti.Q.angle());
 	
@@ -940,10 +1020,13 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 	double radius = 0.0;
 	if(distToLoop != 0.0)
 	{
-		double expo = ((iter/(double)itermax)*elasticity)/(distToLoop);
+		double expo = (elasticity)/(distToLoop);
+		//double expo = ((iter)*elasticity)/(distToLoop);
 		radius = R * exp(-expo*expo);
 		
 	}
+	
+	//std::cout << radius << std::endl;
 	
 	deformationNode * node;
 	deformationNode * containsP;
@@ -1193,6 +1276,74 @@ void softICPController::fixBorder()
 	    }
 }
 
+void softICPController::gaussianSmooth()
+{
+	std::vector<Point3d> newP;
+	for(auto it = m_treeStructure1.m_vertices.begin();
+	    it!= m_treeStructure1.m_vertices.end();
+		++it)
+	{
+		Vertex_handle pVertex = *it;
+		Halfedge_around_vertex_circulator hC = pVertex->vertex_begin();
+		double sx = 0.0;
+		double sy = 0.0;
+		double sz = 0.0;
+		do
+		{
+			Point3d n = hC->opposite()->vertex()->point();
+			sx = sx + n.x();
+			sy = sy + n.y();
+			sz = sz + n.z();
+		}while(++hC!=pVertex->vertex_begin());
+		sx/=pVertex->vertex_degree();
+		sy/=pVertex->vertex_degree();
+		sz/=pVertex->vertex_degree();
+		Point3d smoothed(sx,sy,sz);
+		newP.push_back(smoothed);
+	}
+	int i=0;
+	for(auto it = m_treeStructure1.m_vertices.begin();
+	    it!= m_treeStructure1.m_vertices.end();
+		++it,++i)
+	{
+		Vertex_handle pVertex = *it;
+		pVertex->point() = newP[i];
+		//pVertex->color(1.0,1.0,0.0);
+	}
+	newP.clear();
+	for(auto it = m_treeStructure2.m_vertices.begin();
+	    it!= m_treeStructure2.m_vertices.end();
+		++it)
+	{
+		Vertex_handle pVertex = *it;
+		Halfedge_around_vertex_circulator hC = pVertex->vertex_begin();
+		double sx = 0.0;
+		double sy = 0.0;
+		double sz = 0.0;
+		do
+		{
+			Point3d n = hC->opposite()->vertex()->point();
+			sx = sx + n.x();
+			sy = sy + n.y();
+			sz = sz + n.z();
+		}while(++hC!=pVertex->vertex_begin());
+		sx/=pVertex->vertex_degree();
+		sy/=pVertex->vertex_degree();
+		sz/=pVertex->vertex_degree();
+		Point3d smoothed(sx,sy,sz);
+		newP.push_back(smoothed);
+	}
+	i=0;
+	for(auto it = m_treeStructure2.m_vertices.begin();
+	    it!= m_treeStructure2.m_vertices.end();
+		++it,++i)
+	{
+		Vertex_handle pVertex = *it;
+		pVertex->point() = newP[i];
+		//pVertex->color(1.0,1.0,0.0);
+	}
+}
+
 pointTransformation softICPController::computeTransformation(std::vector<Vertex_handle> & N, std::vector<Vertex_handle> & phiN)
 {
 	pointTransformation pi;
@@ -1274,10 +1425,442 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	return pi;
 }
 
+PolyhedronPtr softICPController::remesh()
+{
+	PolyhedronPtr sp(new Polyhedron);
+	
+	std::vector<double> coords;
+	std::vector<int> tris;
+	std::cout << "remesh :"<<std::endl;
+	//getMeshOutsideSR(coords,tris,m_polyhedron1,0);
+	//getMeshOutsideSR(coords,tris,m_polyhedron2,coords.size()/3);
+	//std::cout << "getMeshOutsideSR ok :"<<std::endl;
+	
+	getMeshOutsideSR(coords,tris,m_polyhedron1,0);
+	getMeshOutsideSR(coords,tris,m_polyhedron2,coords.size()/3);
+	
+	
+	//buildSRMesh(coords,tris,coords.size()/3);
+	std::cout << "buildSRMesh ok :"<<std::endl;
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	
+	std::cout << "call builder :"<<std::endl;
+	sp->delegate(builder);
+	sp->compute_normals();
+	
+	std::set<Point3d> border;
+	sp->normalize_border();
+	for(auto h = sp->border_halfedges_begin(); h!=sp->halfedges_end();++h)
+	{
+		border.insert(h->vertex()->point());
+	}
+	
+	coords.clear(); tris.clear();
+	
+	buildSRMesh(coords,tris,0,border);
+	PolyhedronPtr poly(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> finalbuilder(coords,tris);
+	poly->delegate(finalbuilder);
+	//std::cout << sp->size_of_vertices() << std::endl;
+//	isolatedVertices_remover<HalfedgeDS> verticeRemover;
+//	sp->delegate(verticeRemover);
+//	std::cout << sp->size_of_vertices() << std::endl;
+	
+	poly->compute_normals();
+	//sp->compute_normals();
+
+	return poly;
+	//return sp;
+}
+
+void softICPController::getMeshOutsideSR(vector< double >& coords, vector< int >& tris, PolyhedronPtr p, int vertexOffset)
+{
+	p->set_index_vertices();
+	for(auto pVertex = p->vertices_begin(); pVertex!=p->vertices_end(); ++pVertex)
+	{
+			Point3d p = pVertex->point();
+			coords.push_back(p.x());coords.push_back(p.y());coords.push_back(p.z());
+	}
+	
+	for(auto pFacet = p->facets_begin(); pFacet!=p->facets_end(); ++pFacet)
+	{	
+		int inside = 0;
+		Halfedge_around_facet_circulator hC = pFacet->facet_begin();
+		int vertsIds[3];
+		int vId=0;
+		do
+		{
+			Vertex_handle v = hC->vertex();
+			if(m_isSnappingRegion[v]){inside++;}
+			vertsIds[vId] = v->tag()+vertexOffset;
+			vId++;
+		}
+		while(++hC!=pFacet->facet_begin());
+		if(inside<3)
+		{
+			tris.push_back(vertsIds[0]);tris.push_back(vertsIds[1]);tris.push_back(vertsIds[2]);
+		}
+	}
+}
+
+void softICPController::getMeshInsideSR(vector< double >& coords, vector< int >& tris, PolyhedronPtr p, int vertexOffset)
+{
+	p->set_index_vertices();
+	for(auto pVertex = p->vertices_begin(); pVertex!=p->vertices_end(); ++pVertex)
+	{
+			Point3d p = pVertex->point();
+			coords.push_back(p.x());coords.push_back(p.y());coords.push_back(p.z());
+	}
+	
+	for(auto pFacet = p->facets_begin(); pFacet!=p->facets_end(); ++pFacet)
+	{	
+		int inside = 0;
+		Halfedge_around_facet_circulator hC = pFacet->facet_begin();
+		int vertsIds[3];
+		int vId=0;
+		do
+		{
+			Vertex_handle v = hC->vertex();
+			if(m_isSnappingRegion[v]){inside++;}
+			vertsIds[vId] = v->tag()+vertexOffset;
+			vId++;
+		}
+		while(++hC!=pFacet->facet_begin());
+		if(inside!=0)
+		{
+			tris.push_back(vertsIds[0]);tris.push_back(vertsIds[1]);tris.push_back(vertsIds[2]);
+		}
+	}
+}
+
+
+PolyhedronPtr softICPController::buildSRMesh(vector< double >& coords, vector< int >& tris, int vertexOffset, std::set<Point3d> & border)
+{
+	// construction from a list of points
+	std::list<Point> L;
+	for(auto p = m_treeStructure1.m_vertices.begin(); p!= m_treeStructure1.m_vertices.end(); ++p)
+	{
+		Point3d pp = (*p)->point();
+		//L.push_front(std::make_pair<Point,unsigned>(Point(pp.x(),pp.y(),pp.z()),(*p)->tag()));
+		L.push_front(Point(pp.x(),pp.y(),pp.z()));
+	}
+	
+	for(auto p = m_treeStructure2.m_vertices.begin(); p!= m_treeStructure2.m_vertices.end(); ++p)
+	{
+		Point3d pp = (*p)->point();
+		//L.push_front(std::make_pair<Point,unsigned>(Point(pp.x(),pp.y(),pp.z()),(*p)->tag()));
+		L.push_front(Point(pp.x(),pp.y(),pp.z()));
+	}
+	
+	Triangulation T(L.begin(),L.end());
+	if(T.is_valid()){ std::cout << "triangulation is valid" << std::endl;}
+	else{ std::cout << "triangulation is not valid" << std::endl;}
+	
+	std::vector<RFacet> facets;
+	
+	AABB_Tree tree(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
+	tree.insert(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
+	tree.build();
+	
+	Perimeter perimeter(0.0);
+	DistanceSurface distSurf(tree,border);
+	
+	CGAL::advancing_front_surface_reconstruction(L.begin(),L.end(),std::back_inserter(facets),distSurf);
+	
+	for(auto v = L.begin(); v!=L.end();++v)
+	{
+		auto p = (*v);
+		coords.push_back(p.x());coords.push_back(p.y());coords.push_back(p.z());
+	}
+	
+	for(auto f = facets.begin(); f!=facets.end(); ++f)
+	{
+		//tris.push_back(*f[0]);tris.push_back(*f[1]);tris.push_back(*f[2]);
+		tris.push_back((*f)[0]);tris.push_back((*f)[1]);tris.push_back((*f)[2]);
+	}
+}
+
+/*void softICPController::findCouples(PolyhedronPtr meshA, PolyhedronPtr meshB)
+{
+
+	Facet_iterator pFacet =	NULL;
+	std::list<AABB_Tree::Primitive_id> primitives;
+	std::list<Triangle> triangles;
+
+	unsigned hEID = 0;
+	unsigned fID = 0;
+	
+	AABB_Tree tree;
+	
+	//The AABB-tree is built on the polyhedron with the less number of facets
+	if(meshA->size_of_facets() < meshB->size_of_facets())
+	{
+		for(pFacet = meshA->facets_begin(); pFacet != meshA->facets_end(); pFacet++) 
+		{triangles.push_back(Triangle(pFacet));}
+		tree.rebuild(triangles.begin(),triangles.end());
+		
+		//collision test with each facet of the second polyhedron
+		for (pFacet = meshB->facets_begin(); pFacet != meshB->facets_end(); pFacet++)
+		{
+			tree.all_intersected_primitives(Triangle(pFacet), std::back_inserter(primitives));
+			if(primitives.size() !=0)
+			{
+				
+			}
+		}
+	}
+	
+	else
+	{
+		for(pFacet = meshB->facets_begin(); pFacet != meshB->facets_end(); pFacet++)
+		{triangles.push_back(Triangle(pFacet));}
+		tree.rebuild(triangles.begin(),triangles.end());
+		
+		//collision test with each facet of the first polyhedron
+		for(pFacet = meshA->facets_begin(); pFacet != meshA->facets_end(); pFacet++)
+		{
+			tree.all_intersected_primitives(Triangle(pFacet), std::back_inserter(primitives));
+			if(primitives.size() !=0)
+			{
+				
+			}
+		}
+	}
+}
+
+void softICPController::remeshSR(std::vector<double> & coords, std::vector<int> & tris, int vertexOffset)
+{
+	PolyhedronPtr subMeshA(new Polyhedron);
+	PolyhedronPtr subMeshB(new Polyhedron);
+	
+	std::vector<double> coords;
+	std::vector<int> tris;
+	
+	getMeshInsideSR(coords,tris,m_polyhedron1,0);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	subMeshA->delegate(builder);
+	subMeshA->compute_normals();
+	coords.clear();tris.clear;
+	getMeshInsideSR(coords,tris,m_polyhedron2,0);
+	subMeshB->delegate(builder);
+	subMeshB->compute_normals();
+	
+}
+
+void softICPController::floodConstruct(PolyhedronPtr mesh1, PolyhedronPtr mesh2)
+{
+	Facet_iterator pFacet =	NULL;
+	std::list<AABB_Tree::Primitive_id> primitives;
+	std::list<Triangle> triangles;
+
+	std::list<Facet_handle> solution;
+	
+	std::map<Facet_handle, bool> isVisited;
+	
+	AABB_Tree tree;
+	
+	unsigned heID = 0;
+	unsigned faceID = 0;
+
+	if(mesh1->size_of_facets() > mesh2->size_of_facets())
+	{
+		//Build the AABB-tree on the other surface
+		//for(pFacet = mesh2->facets_begin(); pFacet != mesh2->facets_end(); pFacet++) {triangles.push_back(Triangle(pFacet));}
+		//tree.rebuild(triangles.begin(),triangles.end());
+		
+		//Get all the facets adjacent to the border
+		std::list<Facet_handle> front1;
+		std::list<Facet_handle> front2;
+		
+		
+		for(auto it = m_loop1.begin(); it!=m_loop1.end();++it)
+		{	
+			solution.push_back((*it)->opposite()->face());
+			front1.push_back((*it)->opposite()->face());
+			isVisited[front1.back()] = true;
+		}
+		
+		for(auto it = m_loop2.begin(); it!=m_loop2.end();++it)
+		{
+			solution.push_back((*it)->opposite()->face());
+			front2.push_back((*it)->opposite()->face());
+			isVisited[front2.back()] = true;
+		}
+		
+		for(auto pFacet = front1.begin(); pFacet != front1.end(); ++pFacet)
+		{
+			triangles.push_back(Triangle(pFacet));
+		}
+		tree.rebuild(triangles.begin(),triangles.end());
+		
+		bool stopCondition = false;
+		
+		while(!stopCondition)
+		{
+			int front1Size = front1.size();
+			int front2Size = front2.size();
+			for(unsigned i = 0; i< front1Size();++i)
+			{
+				Facet_handle f = front1.front();
+				Halfedge_around_facet_circulator h = f->facet_begin();
+				do
+				{
+					Facet_handle nF = h->opposite()->face();
+					if(!isVisited[nF])
+					{
+						front1.push_back(nF);
+					}
+				}
+				while(++h!=f->facet_begin());
+				front1.pop_front();
+			}// front1 has been updated
+			
+			for(unsigned i = 0; i< front2Size();++i)
+			{
+				Facet_handle f = front2.front();
+				Halfedge_around_facet_circulator h = f->facet_begin();
+				do
+				{
+					Facet_handle nF = h->opposite()->face();
+					if(!isVisited[nF])
+					{
+						front2.push_back(nF);
+					}
+				}
+				while(++h!=f->facet_begin());
+				front2.pop_front();
+			}// front2 has been updated
+			
+			// Check distance // intersection betwen front1 and 2
+			for(unsigned i=0;i<front1.size();++i)
+			{
+				triangles.push_back(Triangle(front1[i]));
+			}
+			tree.rebuild();
+			for(auto it = front2.begin(); it!= front2.end(); ++it)
+			{
+				if(tree.do_intersect(*it))
+				{
+					front2.erase(it);
+				}
+			}
+		}
+		
+		
+		//Flood while there is no intersection
+		
+		while(!front1.empty())
+		{
+			Facet_handle f = front1.front();
+			tree.all_intersected_primitives(Triangle(f),std::back_inserter(primitives));
+			if(primitives.size()!=0)
+			{
+				m_inter_tri.push_back(Triangle_Cut(Compute_Normal_direction(pFacet->facet_begin()), false));
+				do
+				{
+					
+					front2.push_back(primitives.back()->facet());
+					isVisited[primitives.back()];
+					m_inter_tri.push_back(Triangle_Cut(Compute_Normal_direction(primitives.back()->facet()->facet_begin()), true));
+					m_Couples[primitives.back()->facet()].insert(pFacet);
+					primitives.pop_back();
+				}while(primitives.size()!=0);
+				
+				for(unsigned i=0;i<front1.size();++i)
+				{
+					front2.push_back(tree.closest_point_and_primitive(front1[i]));
+				}
+				
+			}
+			else
+			{
+				solution.push_back(f);
+				Halfedge_around_facet_circulator h = f->facet_begin();
+				do
+				{
+					Facet_handle nF = h->opposite()->face();
+					if(!isVisited[nF])
+					{
+						front1.push_back(nF);
+						isVisited[nF] = true;
+					}
+				}
+				while(++h!=f->facet_begin());
+			}
+			front1.pop_front();
+		}
+		
+		
+		
+		
+	
+	}
+}
+
+void softICPController::computeIntersections()
+{
+	while(!m_Couples.empty())
+	{
+		Facet_handle fA, fB;
+		fA = m_Couples.begin()->first;
+		fB = *m_Couples[fA].begin();
+		interTriangleTriangle(fA, fB);
+		rmCouple(fA, fB);
+	}
+}*/
+
+/*void softICPController::cutIntersectedFacets(PolyhedronPtr meshA, PolyhedronPtr meshB)
+{
+	Triangle_Cut TriCut;
+	Halfedge_handle he;
+
+	//every intersected facet is triangulated if at least one of the intersections is a segment
+	for(FacetId Facet = 0 ; Facet != m_inter_tri.size() ; ++Facet)
+	{
+		if(!m_inter_tri[Facet].CutList.empty())
+		{
+			TriCut = m_inter_tri[Facet];
+			he = Facet_Handle[Facet]->facet_begin();
+			bool IsExt[3];
+			//creation of a triangulation
+			Triangulation<Exact_Kernel> T(he, TriCut.norm_dir);
+			//add the list of intersection points (only happens in case of intersection of two edges)
+			for(std::set<InterId>::iterator i = TriCut.PtList.begin();i != TriCut.PtList.end();++i)
+			{
+				T.add_new_pt(InterPts[*i], (unsigned long &)*i);    // MT: ajout cast
+			}
+			//add the intersection segments
+			for(int i = 0;i!=(int)TriCut.CutList.size();++i)
+			{
+				T.add_segment(InterPts[TriCut.CutList[i][0]], InterPts[TriCut.CutList[i][1]], TriCut.CutList[i][0], TriCut.CutList[i][1]);
+			}
+			//get the triangles of the triangulation thay belong to the result
+			//and determine if the three neighboring facets belongs to the result (using IsExt[3])
+			vector<vector<unsigned long> > Tri_set = T.get_triangles((m_BOOP == MINUS && !TriCut.Facet_from_A)?true:false, IsExt);
+			//add these triangles to the result
+			ppbuilder.add_triangle(Tri_set, he);
+
+			//update the tags
+			Facet_Handle[Facet]->IsOK = true;
+			if(IsExt[0]) he->opposite()->facet()->IsExt = true;
+			if(IsExt[1]) he->next()->opposite()->facet()->IsExt = true;
+			if(IsExt[2]) he->next()->next()->opposite()->facet()->IsExt = true;
+		}
+	}
+}*/
+
+/*void softICPController::rmCouple(Facet_handle A, Facet_handle B)
+{
+	if(m_Couples[A].count(B) != 0) m_Couples[A].erase(B);
+	if(m_Couples[A].empty()) m_Couples.erase(A);
+}*/
+
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1, double w2, double w3)
 {
 	double dist = w1 * sqrt(CGAL::squared_distance(v1->point(),v2->point()));
 	dist += w2*acos(v1->normal()*v2->normal());
 	dist += w3*L2Dist(v1->getSemantic(),v2->getSemantic());
 	return dist;
-	}
+}
+
+	

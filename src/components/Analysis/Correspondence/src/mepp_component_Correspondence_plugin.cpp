@@ -569,7 +569,7 @@ void mepp_component_Correspondence_plugin::OnLearn()
 		{
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
-			unsigned posE = meshIDString.find_last_of(".ply");
+			unsigned posE = meshIDString.find_last_of(".");
 			
 			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 			
@@ -996,6 +996,153 @@ void mepp_component_Correspondence_plugin::OnCompareMethods()
 		}
 	}
 }
+
+void mepp_component_Correspondence_plugin::OnCleanData()
+{	
+	Viewer* viewerI;
+	
+	SettingsDialog dial;
+	
+	int nbLabel = 4;
+	
+	if (dial.exec() == QDialog::Accepted)
+	{
+		QApplication::setOverrideCursor(Qt::WaitCursor);
+		nbLabel = dial.spinBox->value();
+			
+		std::vector<std::string> files = getFileList("choose the segmented meshes directory");
+		
+		QString path = QFileDialog::getExistingDirectory (mw, tr("Choose the non-segmented meshes directory"),"/home/leon/");
+		std::string meshName = path.toStdString();
+		
+		for(unsigned j=0;j<files.size();++j)
+		{
+			unsigned posE = files[j].find_last_of(".ply");
+			if(posE == files[j].size())
+			{
+				continue;
+			}
+			
+			std::cout << files[j] << std::endl;
+			
+			emit(mw->get_actionNewEmpty()->trigger()); // Create new window for each mesh
+			for(int i=0; i<lwindow.size();i++)
+			{
+				
+				viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[i]->widget());
+				ScenePtr scene = viewerI->getScenePtr();
+				if(viewerI->getScenePtr()->get_polyhedron()->empty())
+				{
+					viewerI->getScenePtr()->add_mesh(files[j].c_str(),0,NULL,viewerI);
+					PolyhedronPtr segMesh = viewerI->getScenePtr()->get_polyhedron();
+					
+					if(viewerI->getScenePtr()->get_polyhedron()->empty())
+					{
+						std::cout << "couldn't open mesh" << files[j] << std::endl;
+						break;
+					}
+					
+					// Load .part and .label files
+					Correspondence_ComponentPtr comp_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, segMesh);
+					std::string meshIDString = segMesh->pName;
+					unsigned posB = meshIDString.find_last_of("/");
+					unsigned posE = meshIDString.find_last_of(".obj");
+					int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+					std::string meshDir = meshIDString.substr(0,posB);
+					comp_ptr->initParameters(nbLabel,meshID,meshDir);
+					
+					// Add the non-segmented mesh
+					std::stringstream nSF;
+					nSF<<meshName<<"/"<<meshID<<".obj";
+					scene->add_mesh(nSF.str().c_str(),1,NULL,viewerI);
+					PolyhedronPtr goodMesh = scene->get_polyhedron(1);
+					
+					// Compute facet correspondence
+					std::vector<int> faceLabels;
+					std::vector<int> faceCC;
+					std::vector<int> closest(goodMesh->size_of_facets(),-1);
+					int pc = 0;
+					Analysis::Shape & shape = comp_ptr->getShape();
+					for(auto pFacets = goodMesh->facets_begin();
+					pFacets!=goodMesh->facets_end();++pFacets)
+					{
+						int qc = 0;
+						Point3d p = pFacets->facet_begin()->vertex()->point();
+						double distMin = std::numeric_limits<double>::max();
+						for(auto qFacets = segMesh->facets_begin();
+						qFacets!=segMesh->facets_end();++qFacets)
+						{
+							Point3d q = qFacets->facet_begin()->vertex()->point();
+							double dist = CGAL::squared_distance(p,q);
+							if(dist< distMin)
+							{
+								distMin = dist;
+								closest[pc] = qc;
+							}
+							qc++;
+						}
+						pc++;
+					}
+					for(unsigned c=0;c<closest.size();++c)
+					{
+						faceLabels.push_back(shape.m_faceLabels[closest[c]]);
+						faceCC.push_back(shape.m_faceSegments[closest[c]]);
+					}
+					
+					// Now print the resulting labels and segmentID in files
+					std::ofstream fileL;
+					std::stringstream ssL;
+					ssL<<meshDir<<"/"<<shape.m_meshID<<".labelsN";
+					fileL.open(ssL.str().c_str());
+					for(unsigned c=0;c<faceLabels.size();++c)
+					{
+						
+						fileL<<faceLabels[c]<<"\n";
+					}
+					fileL.close();
+					
+					std::ofstream fileCC;
+					std::stringstream ssCC;
+					ssCC<<meshDir<<"/"<<shape.m_meshID<<".partsN";
+					fileCC.open(ssCC.str().c_str());
+					for(unsigned c=0;c<faceCC.size();++c)
+					{
+						
+						fileCC<<faceCC[c]<<"\n";
+					}
+					fileCC.close();
+				}
+				
+			}
+		}
+	}
+}
+
+vector< string > mepp_component_Correspondence_plugin::getFileList(std::string message)
+{
+	std::vector<std::string> files;
+	DIR *dp;
+	struct dirent *dirp;
+	
+	QString path = QFileDialog::getExistingDirectory (mw, tr(message.c_str()),"/home/leon/");
+	std::string dir = path.toStdString();
+	
+	// read all files in directory
+	if((dp  = opendir(dir.c_str())) == NULL){ std::cout<< "Unable to open directory "<<dir<<std::endl;}
+	while ((dirp = readdir(dp)) != NULL)
+	{
+		if(dirp->d_name[0]!='.')
+		{
+			files.push_back(dir+"/"+std::string(dirp->d_name));
+		}
+		
+	}
+	closedir(dp);
+	return files;
+}
+
+
+
 
 #if QT_VERSION < 0x050000
 Q_EXPORT_PLUGIN2(mepp_component_Correspondence_plugin, mepp_component_Correspondence_plugin);

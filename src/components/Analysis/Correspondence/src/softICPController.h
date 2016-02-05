@@ -44,6 +44,29 @@ struct ordering {
 	}
 };
 
+
+   struct Triangle_Cut {
+		/*! \brief true if the facet belongs to the first polyhedron*/
+		bool								Facet_from_A;
+		/*! \brief An exact vector giving the direction of the normal*/
+		Vector_exact						norm_dir;
+		/*! \brief A list of segments (the intersections with the facets of the other polyhedron)*/
+                std::vector<std::vector<InterId> >	CutList;
+		/*! \brief A list of points (when the intersection is a point)*/
+		std::set<InterId>					PtList;
+		/*! \brief The list of the intersections*/
+		std::map<HalfedgeId, InterId>		RefInter;
+
+                /*! \brief Default constructor*/
+                Triangle_Cut() {}
+                /*! \brief Constructor
+                 \param V : The normal direction
+                 \param ffA : Must be true if the facet belongs to the first polyhedron*/
+                Triangle_Cut(Vector_exact V, bool ffA) { norm_dir=V; Facet_from_A=ffA; } // MT
+	};
+
+
+
 class pointTransformation
 {
 public:
@@ -66,11 +89,15 @@ public:
 
 	void applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, const int itermax);
 	
+	PolyhedronPtr remesh();
 	
 private:
 	
+	double m_R;
 	
 	std::map< std::pair<Vertex_handle,Vertex_handle>, double> m_distanceMemo;
+	
+	std::map< Vertex_handle, bool > m_isSnappingRegion;
 	
 	bool m_stop_for_debug;
 	
@@ -89,11 +116,16 @@ private:
 	deformationNode m_treeStructure1;
 	deformationNode m_treeStructure2;
 	
+	std::vector<Halfedge_handle> m_loop1;
+	std::vector<Halfedge_handle> m_loop2;
+	
+	std::vector<Triangle_Cut> m_inter_tri;
+	
+	std::map<Facet_handle, std::set<Facet_handle> > m_Couples;
+	
 	double getDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
 	
 	void getSnappingRegionAABB();
-	
-	void getSnappingRegionKdTree();
 	
 	void getSnappingRegionOld(double R, double squared_euclidean_radius);
 	
@@ -130,10 +162,29 @@ private:
 	
 	void fixBorder();
 	
+	void gaussianSmooth();
+	
 	void initClosest(std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices, int m);
 	
+	void getMeshOutsideSR(std::vector<double> & coords, std::vector<int> & tris, PolyhedronPtr p, int vertexOffset);
 	
+	void getMeshInsideSR(vector< double >& coords, vector< int >& tris, PolyhedronPtr p, int vertexOffset);
 	
+	PolyhedronPtr buildSRMesh(std::vector<double> & coords, std::vector<int> & tris, int vertexOffset, std::set<Point3d> & border);
+	
+	void remeshSR(std::vector<double> & coords, std::vector<int> & tris, int vertexOffset);
+	
+	void findCouples(PolyhedronPtr meshA, PolyhedronPtr meshB);
+	
+	void floodConstruct(PolyhedronPtr meshA, PolyhedronPtr meshB);
+	
+	void rmCouple(Facet_handle A, Facet_handle B);
+	
+	void computeIntersections();
+	
+	void interTriangleTriangle(Facet_handle A, Facet_handle B);
+	
+	void cutIntersectedFacets(PolyhedronPtr meshA, PolyhedronPtr meshB);
 };
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);

@@ -43,6 +43,8 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 	std::vector<unsigned> faces;
 	std::vector<Vertex_handle> alreadyvisited;
 
+	std::cout << "start initgm" << std::endl;
+	
 	p->set_index_vertices();
 
 	for(Vertex_iterator pVertex = p->vertices_begin();
@@ -66,6 +68,8 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 		}
 		while(++pHalfedge != pFacet->facet_begin());
 	}
+	
+	std::cout << "before geodesic mesh init" << std::endl;
 	// initialize geodesic graph and algorithm
         m_gmesh.initialize_mesh_data(points,faces);
         m_geoAlg = new geodesic::GeodesicAlgorithmExact(&m_gmesh);
@@ -74,7 +78,9 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 void Correspondence_Component::learnDescriptor(PolyhedronPtr p,std::string meshDir)
 {
 	m_Shape.initFaceLabelsAndSegments(meshDir);
+	std::cout << "initFaceLabelsAndSegments" << std::endl;
 	computeDescriptorAllVertices(p);
+	std::cout << "computeDescriptorAllVertices" << std::endl;
 	saveDescriptor(p,meshDir);
 }
 
@@ -265,7 +271,9 @@ void Correspondence_Component::computeGeodesicDistancesAllVertices(PolyhedronPtr
 void Correspondence_Component::computeDescriptorAllVertices(PolyhedronPtr p)
 {
 	this->initGeodesicMesh(p);
+	std::cout << "initgeodesicMesh" << std::endl;
 	this->computeGeodesicDistancesAllVertices(p);
+	std::cout << "computeGeodesicDistancesAllVertices" << std::endl;
 	
 	this->initMaxVector(p);
 	for(Vertex_iterator pVertex = p->vertices_begin();
