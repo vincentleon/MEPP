@@ -22,6 +22,9 @@
 
 #include <CGAL/Subdivision_method_3.h>
 
+#include <CGAL/Polygon_mesh_processing/stitch_borders.h>
+
+
 typedef CGAL::Simple_cartesian<double> AABB_Kernel;
 typedef CGAL::AABB_polyhedron_triangle_primitive<AABB_Kernel,Polyhedron> AABB_Primitive;
 typedef CGAL::AABB_traits<AABB_Kernel, AABB_Primitive> AABB_Traits;
@@ -38,7 +41,6 @@ typedef Triangulation::Point          Point;
 typedef AABB_Kernel::Triangle_3 Triangle;
 
 typedef CGAL::cpp11::array<std::size_t,3> RFacet;
-
 
 struct Perimeter {
   double bound;
@@ -69,17 +71,18 @@ struct DistanceSurface {
 	std::set<Point3d> & m_borders;
 	DistanceSurface(AABB_Tree & tree, std::set<Point3d> & borders) : m_tree(tree), m_borders(borders){}
 	
-	
 	template <typename Point>
 	bool operator()(const Point& p, const Point& q, const Point& r) const
 	{	
-		
 		Point3d pp(p.x(),p.y(),p.z());
 		Point3d qq(q.x(),q.y(),q.z());
 		Point3d rr(r.x(),r.y(),r.z());
+		Triangle t(pp,qq,rr);
 		
+		bool border = m_borders.count(pp) && m_borders.count(qq) && m_borders.count(rr); 
+		//bool tree = m_tree.do_intersect(t);
 		
-		return m_borders.count(pp) && m_borders.count(qq) && m_borders.count(rr);
+		return border;
 	}
 	
 };
@@ -328,9 +331,6 @@ void softICPController::displayNode(deformationNode* root)
 		displayNode(root->m_childrenNodes[c]);
 	}
 }
-
-
-
 
 void softICPController::colorCluster(deformationNode* root)
 {
@@ -884,8 +884,6 @@ void softICPController::computeMatrixDistance(deformationNode* root)
 }
 
 
-
-
 void softICPController::snapRegions(double R, double elasticity, int itermax, int treeDepth)
 {
 	std::cout << "Total time : ";
@@ -1425,56 +1423,48 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	return pi;
 }
 
-PolyhedronPtr softICPController::remesh()
+void softICPController::remesh(Viewer * v)
 {
-	PolyhedronPtr sp(new Polyhedron);
-	
+	/*PolyhedronPtr extMesh(new Polyhedron);
 	std::vector<double> coords;
 	std::vector<int> tris;
-	std::cout << "remesh :"<<std::endl;
-	//getMeshOutsideSR(coords,tris,m_polyhedron1,0);
-	//getMeshOutsideSR(coords,tris,m_polyhedron2,coords.size()/3);
-	//std::cout << "getMeshOutsideSR ok :"<<std::endl;
+	*/
 	
-	getMeshOutsideSR(coords,tris,m_polyhedron1,0);
-	getMeshOutsideSR(coords,tris,m_polyhedron2,coords.size()/3);
+	PolyhedronPtr outMesh = getMeshOutsideSR();
+	std::cout << "after getMeshOutsideSR()" << std::endl;
+	outMesh->normalize_border();
+	outMesh->compute_normals();
 	
+	//polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	//extMesh->delegate(builder);
+	//extMesh->normalize_border();
 	
-	//buildSRMesh(coords,tris,coords.size()/3);
-	std::cout << "buildSRMesh ok :"<<std::endl;
-	polyhedron_builder<HalfedgeDS> builder(coords,tris);
-	
-	std::cout << "call builder :"<<std::endl;
-	sp->delegate(builder);
-	sp->compute_normals();
-	
+	// collect border points for surface Reconstruction filtering
 	std::set<Point3d> border;
-	sp->normalize_border();
-	for(auto h = sp->border_halfedges_begin(); h!=sp->halfedges_end();++h)
+	for(auto h = outMesh->border_halfedges_begin(); h!=outMesh->halfedges_end();++h)
 	{
 		border.insert(h->vertex()->point());
 	}
 	
-	coords.clear(); tris.clear();
 	
-	buildSRMesh(coords,tris,0,border);
-	PolyhedronPtr poly(new Polyhedron);
-	polyhedron_builder<HalfedgeDS> finalbuilder(coords,tris);
-	poly->delegate(finalbuilder);
-	//std::cout << sp->size_of_vertices() << std::endl;
-//	isolatedVertices_remover<HalfedgeDS> verticeRemover;
-//	sp->delegate(verticeRemover);
-//	std::cout << sp->size_of_vertices() << std::endl;
+	PolyhedronPtr srMesh = buildSRMesh(border);
+	std::cout << "after buildSRMesh()" << std::endl;
 	
-	poly->compute_normals();
-	//sp->compute_normals();
-
-	return poly;
-	//return sp;
+	srMesh->compute_normals();
+	
+	v->getScenePtr()->add_polyhedron(outMesh);
+	v->getScenePtr()->add_polyhedron(srMesh);
+	
+	
 }
 
-void softICPController::getMeshOutsideSR(vector< double >& coords, vector< int >& tris, PolyhedronPtr p, int vertexOffset)
+PolyhedronPtr softICPController::getMeshOutsideSR()
 {
+	PolyhedronPtr OutMesh(new Polyhedron);
+	
+	std::vector<double> coords;
+	std::vector<int> tris;
+	PolyhedronPtr p = m_polyhedron1;
 	p->set_index_vertices();
 	for(auto pVertex = p->vertices_begin(); pVertex!=p->vertices_end(); ++pVertex)
 	{
@@ -1492,7 +1482,7 @@ void softICPController::getMeshOutsideSR(vector< double >& coords, vector< int >
 		{
 			Vertex_handle v = hC->vertex();
 			if(m_isSnappingRegion[v]){inside++;}
-			vertsIds[vId] = v->tag()+vertexOffset;
+			vertsIds[vId] = v->tag();
 			vId++;
 		}
 		while(++hC!=pFacet->facet_begin());
@@ -1501,10 +1491,9 @@ void softICPController::getMeshOutsideSR(vector< double >& coords, vector< int >
 			tris.push_back(vertsIds[0]);tris.push_back(vertsIds[1]);tris.push_back(vertsIds[2]);
 		}
 	}
-}
-
-void softICPController::getMeshInsideSR(vector< double >& coords, vector< int >& tris, PolyhedronPtr p, int vertexOffset)
-{
+	
+	int vertOffset = coords.size()/3;
+	p = m_polyhedron2;
 	p->set_index_vertices();
 	for(auto pVertex = p->vertices_begin(); pVertex!=p->vertices_end(); ++pVertex)
 	{
@@ -1522,22 +1511,103 @@ void softICPController::getMeshInsideSR(vector< double >& coords, vector< int >&
 		{
 			Vertex_handle v = hC->vertex();
 			if(m_isSnappingRegion[v]){inside++;}
-			vertsIds[vId] = v->tag()+vertexOffset;
+			vertsIds[vId] = v->tag() + vertOffset ;
 			vId++;
 		}
 		while(++hC!=pFacet->facet_begin());
-		if(inside!=0)
+		if(inside<3)
 		{
 			tris.push_back(vertsIds[0]);tris.push_back(vertsIds[1]);tris.push_back(vertsIds[2]);
 		}
 	}
+	
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	OutMesh->delegate(builder);
+	OutMesh->normalize_border();
+	return OutMesh;
+}
+
+PolyhedronPtr softICPController::getMeshInsideSR(PolyhedronPtr p)
+{
+	PolyhedronPtr InMesh(new Polyhedron);
+	
+	std::vector<double> coords;
+	std::vector<int> tris;
+	
+	p->set_index_vertices();
+	for(auto pVertex = p->vertices_begin(); pVertex!=p->vertices_end(); ++pVertex)
+	{
+			Point3d p = pVertex->point();
+			coords.push_back(p.x());coords.push_back(p.y());coords.push_back(p.z());
+	}
+	
+	for(auto pFacet = p->facets_begin(); pFacet!=p->facets_end(); ++pFacet)
+	{	
+		int inside = 0;
+		Halfedge_around_facet_circulator hC = pFacet->facet_begin();
+		int vertsIds[3];
+		int vId=0;
+		do
+		{
+			Vertex_handle v = hC->vertex();
+			if(m_isSnappingRegion[v]){inside++;}
+			vertsIds[vId] = v->tag();
+			vId++;
+		}
+		while(++hC!=pFacet->facet_begin());
+		if(inside==3)
+		{
+			tris.push_back(vertsIds[0]);tris.push_back(vertsIds[1]);tris.push_back(vertsIds[2]);
+		}
+	}
+	
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	isolatedVertices_remover<HalfedgeDS> isolatedRemover;
+	InMesh->delegate(builder);
+	InMesh->delegate(isolatedRemover);
+	
+	return InMesh;
 }
 
 
-PolyhedronPtr softICPController::buildSRMesh(vector< double >& coords, vector< int >& tris, int vertexOffset, std::set<Point3d> & border)
+PolyhedronPtr softICPController::buildSRMesh(std::set<Point3d> & border)
 {
-	// construction from a list of points
+	std::vector<double> coords;
+	std::vector<int> tris;
+	
+	PolyhedronPtr m1 = getMeshInsideSR(m_polyhedron1);
+	PolyhedronPtr m2 = getMeshInsideSR(m_polyhedron2);
+	std::cout << "after getMeshInsideSR()" << std::endl;
+	// Use catmull clark before triangulation
+	
+	//Subdivision_method_3::CatmullClark_subdivision(*m1,1);
+	//Subdivision_method_3::CatmullClark_subdivision(*m2,1);
+
+	std::cout << "after CatmullClark" << std::endl;
 	std::list<Point> L;
+	for(auto p = m1->vertices_begin(); p!= m1->vertices_end(); ++p)
+	{
+		Point3d pp = p->point();
+		L.push_front(Point(pp.x(),pp.y(),pp.z()));
+	}
+	for(auto p = m2->vertices_begin(); p!= m2->vertices_end(); ++p)
+	{
+		Point3d pp = p->point();
+		L.push_front(Point(pp.x(),pp.y(),pp.z()));
+	}
+
+	//Triangulation T(L.begin(),L.end());
+	std::cout << "size of list : " << L.size() << std::endl;
+	//std::cout << "number of vertices : " << T.number_of_vertices() << std::endl;
+	std::cout << "after Triangulation" << std::endl;
+	std::vector<RFacet> facets;
+	AABB_Tree tree(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
+	tree.insert(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
+	tree.build();
+	std::cout << "tree build" << std::endl;
+	
+	// construction from a list of points
+	/*std::list<Point> L;
 	for(auto p = m_treeStructure1.m_vertices.begin(); p!= m_treeStructure1.m_vertices.end(); ++p)
 	{
 		Point3d pp = (*p)->point();
@@ -1550,22 +1620,21 @@ PolyhedronPtr softICPController::buildSRMesh(vector< double >& coords, vector< i
 		Point3d pp = (*p)->point();
 		//L.push_front(std::make_pair<Point,unsigned>(Point(pp.x(),pp.y(),pp.z()),(*p)->tag()));
 		L.push_front(Point(pp.x(),pp.y(),pp.z()));
-	}
+	}	
 	
 	Triangulation T(L.begin(),L.end());
-	if(T.is_valid()){ std::cout << "triangulation is valid" << std::endl;}
-	else{ std::cout << "triangulation is not valid" << std::endl;}
 	
-	std::vector<RFacet> facets;
-	
+	std::vector<RFacet> facets;	
 	AABB_Tree tree(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
 	tree.insert(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
-	tree.build();
+	tree.build();*/
 	
-	Perimeter perimeter(0.0);
-	DistanceSurface distSurf(tree,border);
+	DistanceSurface pdistSurf(tree,border);
+	Perimeter per(0.0);
 	
-	CGAL::advancing_front_surface_reconstruction(L.begin(),L.end(),std::back_inserter(facets),distSurf);
+	CGAL::advancing_front_surface_reconstruction(L.begin(),L.end(),std::back_inserter(facets),pdistSurf,5,0.52);
+	std::cout << "after reconstrGéodésiques uction" << std::endl;
+	
 	
 	for(auto v = L.begin(); v!=L.end();++v)
 	{
@@ -1575,9 +1644,45 @@ PolyhedronPtr softICPController::buildSRMesh(vector< double >& coords, vector< i
 	
 	for(auto f = facets.begin(); f!=facets.end(); ++f)
 	{
-		//tris.push_back(*f[0]);tris.push_back(*f[1]);tris.push_back(*f[2]);
 		tris.push_back((*f)[0]);tris.push_back((*f)[1]);tris.push_back((*f)[2]);
 	}
+	
+	PolyhedronPtr reconstructedMesh(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	reconstructedMesh->delegate(builder);
+	reconstructedMesh->compute_normals();
+	
+	std::cout << "Reconstructed mesh : "<< reconstructedMesh->size_of_facets() << " facets" << std::endl;
+	
+	return reconstructedMesh;
+}
+
+PolyhedronPtr softICPController::stitchAndSmooth(PolyhedronPtr p, PolyhedronPtr q)
+{
+	// merge w/polyhedronbuilder
+	std::vector<double> coords;
+	std::vector<int> tris;
+	for(auto po = p->points_begin(); po != p->points_end(); ++po)
+	{
+		coords.push_back(po->x());
+		coords.push_back(po->y());
+		coords.push_back(po->z());
+	}
+	for(auto po = q->points_begin(); po != q->points_end(); ++po)
+	{
+		coords.push_back(po->x());
+		coords.push_back(po->y());
+		coords.push_back(po->z());
+	}
+	
+	constructPolyhedron * stitchedMesh(new constructPolyhedron);
+	polyhedron_builder<constructPolyhedron::HalfedgeDS> builder(coords,tris);
+	stitchedMesh->delegate(builder);
+		
+	// stitch non connected vertices (CGAL::stitch_borders)
+	CGAL::Polygon_mesh_processing::stitch_borders(*stitchedMesh);
+	
+	return convertToEnrichedPolyhedron(stitchedMesh);
 }
 
 /*void softICPController::findCouples(PolyhedronPtr meshA, PolyhedronPtr meshB)

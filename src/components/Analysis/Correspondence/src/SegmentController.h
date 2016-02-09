@@ -23,6 +23,9 @@
 typedef CGAL::Simple_cartesian<double> simpleKernel;
 typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;
 
+typedef CGAL::Exact_predicates_inexact_constructions_kernel constructionK;
+typedef CGAL::Polyhedron_3<constructionK> constructPolyhedron;
+
 typedef boost::shared_ptr<Boolean_Operations_Component> Boolean_Operations_ComponentPtr;
 
 typedef std::vector<Vertex_handle> border;
@@ -200,6 +203,8 @@ double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2);
 
 simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p);
 PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p);
+
+PolyhedronPtr convertToEnrichedPolyhedron(constructPolyhedron * p);
 
 void test_softICP_SVD();
 

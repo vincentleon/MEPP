@@ -1685,6 +1685,42 @@ PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p)
 	return sp;
 }
 
+PolyhedronPtr convertToEnrichedPolyhedron(constructPolyhedron * p)
+{
+	unsigned m = 0;
+	
+	std::map<constructPolyhedron::Vertex_handle, int> ids;
+	
+	std::vector<double> coords;
+	for(auto pVertex = p->vertices_begin();
+	    pVertex != p->vertices_end();++pVertex)
+	{
+		coords.push_back(pVertex->point().x());
+		coords.push_back(pVertex->point().y());
+		coords.push_back(pVertex->point().z());
+		//pVertex->id() = m;
+		ids[pVertex] = m;
+		++m;
+	}// collect all vertices for builder
+	
+	std::vector<int> tris;
+	for(auto pFacet = p->facets_begin();
+	pFacet!=p->facets_end();++pFacet)
+	{
+		auto h = pFacet->facet_begin();
+		do
+		{
+			tris.push_back(ids[h->vertex()]);
+		}
+		while(++h!=pFacet->facet_begin());
+	}	
+	PolyhedronPtr sp(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	sp->delegate(builder);
+	return sp;
+}
+
+
 // Compute world coordinates using QGL operations, returns a CGAL::Point3d
 Point3d toWorld(Viewer * v, int p, Point3d lcp)
 {
@@ -1746,9 +1782,7 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 	
 	icp.snapRegions(regionSize,elasticity,itermax,5);
 	
-	PolyhedronPtr result = icp.remesh();
-	
-	v->getScenePtr()->add_polyhedron(result);
+	icp.remesh(v);
 	
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();
