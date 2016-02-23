@@ -14,19 +14,14 @@
 #define CGAL_EIGEN3_ENABLED
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <boost/graph/graph_concepts.hpp>
-//#include <CGAL/Polygon_mesh_processing/triangulate_hole.h>
+
 #include <CGAL/Surface_mesh_deformation.h>
 
-#include "../components/Tools/Boolean_Operations/src/Boolean_Operations_Component.h"
-
-//typedef CGAL::Exact_predicates_inexact_constructions_kernel simpleKernel;
 typedef CGAL::Simple_cartesian<double> simpleKernel;
 typedef CGAL::Polyhedron_3<simpleKernel,CGAL::Polyhedron_items_with_id_3> simplePolyhedron;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel constructionK;
 typedef CGAL::Polyhedron_3<constructionK> constructPolyhedron;
-
-typedef boost::shared_ptr<Boolean_Operations_Component> Boolean_Operations_ComponentPtr;
 
 typedef std::vector<Vertex_handle> border;
 
@@ -38,6 +33,8 @@ typedef std::map<vertex_descriptor, std::size_t>   Internal_vertex_map;
 typedef std::map<halfedge_descriptor, std::size_t>     Internal_hedge_map;
 typedef boost::associative_property_map<Internal_vertex_map>   Vertex_index_map;
 typedef boost::associative_property_map<Internal_hedge_map>    Hedge_index_map;
+
+class softICPController;
 
 struct snaxel
 {
@@ -87,11 +84,11 @@ public:
 	
 	void glueSegments(Viewer * v);
 	
-// 	//void sewSegments(Viewer * v);
-	
 	void fitSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model, int & idBordTarget, int & idBordModel);
 	
 	void sewSegments(Viewer * v, PolyhedronPtr target, PolyhedronPtr model);
+	
+	void remesh(Viewer *v, PolyhedronPtr target, PolyhedronPtr model);
 	
 	void softICP(Viewer * v, PolyhedronPtr target, PolyhedronPtr model, double elasticity, double regionSize, int itermax);
 	
@@ -122,6 +119,7 @@ public:
 private:
 	
 	PolyhedronPtr m_polyhedron;
+	softICPController * m_icp;
 };
 
 template<class HDS>
@@ -168,7 +166,8 @@ public:
 		    pVertex!= hds.vertices_end();
 			++pVertex)
 		{
-			if(pVertex->halfedge() == 0)
+			//if(pVertex->halfedge() == 0)
+			if(pVertex->vertex_degree() == 0)
 			{
 				hds.vertices_erase(pVertex);
 			}
@@ -202,6 +201,7 @@ Point3d toPartFrame(Viewer * v, int p, Point3d wcp);
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2);
 
 simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p);
+
 PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p);
 
 PolyhedronPtr convertToEnrichedPolyhedron(constructPolyhedron * p);

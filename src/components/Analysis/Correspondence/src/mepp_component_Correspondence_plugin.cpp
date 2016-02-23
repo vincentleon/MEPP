@@ -16,7 +16,7 @@
 
 #include <QFileDialog>
 
-
+#include "../components/Tools/Boolean_Operations/src/BoolPolyhedra.h"
 
 void mepp_component_Correspondence_plugin::post_draw()
 {
@@ -677,8 +677,6 @@ void mepp_component_Correspondence_plugin::OnMoveBorder()
 	mainViewer->recreateListsAndUpdateGL();
 }
 
-
-
 void mepp_component_Correspondence_plugin::OnCut()
 {	
 	//////////////////////////////////////////////////////////////////////////////////////////
@@ -798,8 +796,6 @@ void mepp_component_Correspondence_plugin::OnLoadDescriptor()
 	}
 }
 
-
-
 void mepp_component_Correspondence_plugin::OnGlue()
 {
 	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
@@ -850,18 +846,21 @@ void mepp_component_Correspondence_plugin::OnUnion()
 		elasticity = dial.doubleSpinBox->value();
 		regionSize = dial.doubleSpinBox_2->value();
 		itermax = dial.spinBox_2->value();
-	
-	//std::cout << " Elasticity :" << elasticity << std::endl;
+		std::cout << "itermax :" << itermax << std::endl;
 		
-	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
-	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
-	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+		//std::cout << " Elasticity :" << elasticity << std::endl;
+		
+		Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+		PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
+		Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
 
-	SegmentController & mainSegCtr = mainCorres->m_segCtr;
-	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
-	
-	mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);
-	mainViewer->recreateListsAndUpdateGL();
+		SegmentController & mainSegCtr = mainCorres->m_segCtr;
+		PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
+		
+		std::cout << "itermax :" << itermax << std::endl;
+		
+		mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);
+		mainViewer->recreateListsAndUpdateGL();
 	}
 }
 
@@ -1060,14 +1059,28 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 					// Compute facet correspondence
 					std::vector<int> faceLabels;
 					std::vector<int> faceCC;
-					std::vector<int> closest(goodMesh->size_of_facets(),-1);
+					std::vector<Facet_handle> closest;//(goodMesh->size_of_facets(),-1);
 					int pc = 0;
 					Analysis::Shape & shape = comp_ptr->getShape();
+					
+					std::list<Triangle> triangles;
+					for(auto pFacet = segMesh->facets_begin(); pFacet != segMesh->facets_end(); pFacet++) triangles.push_back(Triangle(pFacet));
+					AABB_Tree tree(triangles.begin(),triangles.end());
+					std::list<AABB_Tree::Primitive_id> primitives;
+					
 					for(auto pFacets = goodMesh->facets_begin();
 					pFacets!=goodMesh->facets_end();++pFacets)
 					{
-						int qc = 0;
-						Point3d p = pFacets->facet_begin()->vertex()->point();
+						
+						tree.all_intersected_primitives(Triangle(pFacets),std::back_inserter(primitives));
+						Facet_handle inter = primitives.back()->facet();
+						
+						closest.push_back(inter);
+						pc++;
+					}
+						
+						//int qc = 0;
+						/*Point3d p = pFacets->facet_begin()->vertex()->point();
 						double distMin = std::numeric_limits<double>::max();
 						for(auto qFacets = segMesh->facets_begin();
 						qFacets!=segMesh->facets_end();++qFacets)
@@ -1082,11 +1095,11 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 							qc++;
 						}
 						pc++;
-					}
+					}*/
 					for(unsigned c=0;c<closest.size();++c)
 					{
-						faceLabels.push_back(shape.m_faceLabels[closest[c]]);
-						faceCC.push_back(shape.m_faceSegments[closest[c]]);
+						faceLabels.push_back(shape.m_faceLabels[closest[c]->tag()]);
+						faceCC.push_back(shape.m_faceSegments[closest[c]->tag()]);
 					}
 					
 					// Now print the resulting labels and segmentID in files
@@ -1116,6 +1129,50 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 			}
 		}
 	}
+}
+
+void mepp_component_Correspondence_plugin::OnSoftICP()
+{
+	//////////////////////////////////////////////////////////////
+	///
+	///	Get the Main viewer and fusion all the parts in it
+	///
+	//////////////////////////////////////////////////////////////
+	SettingsDialog dial;
+	double elasticity = 1/500.0;
+	double regionSize = 0.5;
+	int itermax = 5;
+
+	if (dial.exec() == QDialog::Accepted)
+	{
+		elasticity = dial.doubleSpinBox->value();
+		regionSize = dial.doubleSpinBox_2->value();
+		itermax = dial.spinBox_2->value();
+	
+		Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+		PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
+		Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+
+		SegmentController & mainSegCtr = mainCorres->m_segCtr;
+		PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
+		
+		mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);
+		mainViewer->recreateListsAndUpdateGL();
+	}
+}
+
+void mepp_component_Correspondence_plugin::OnRemesh()
+{		
+	Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+	PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
+	Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+
+	SegmentController & mainSegCtr = mainCorres->m_segCtr;
+	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
+	
+	mainSegCtr.remesh(mainViewer,partPoly,mainPoly);
+	mainViewer->recreateListsAndUpdateGL();
+	
 }
 
 vector< string > mepp_component_Correspondence_plugin::getFileList(std::string message)

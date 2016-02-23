@@ -14,31 +14,17 @@
 #include <QAction>
 #include <QtPlugin>
 #include <QGLFramebufferObject>
+
+#include "../components/Analysis/Correspondence/src/Correspondence_Component.h"
+#include "../components/Analysis/Correspondence/src/SegmentController.h"
+
 #include <set>
-
-#include "Correspondence_Component.h"
-#include "SegmentController.h"
-
 #include <stack>
 #include <ctime>
 
 #include <dirent.h>
 
 typedef boost::shared_ptr<Correspondence_Component> Correspondence_ComponentPtr;
-
-/*std::stack<clock_t> timer_stack;
-
-void timer_tic() {
-  timer_stack.push(clock());
-}
-
-void timer_toc() {
-    std::cout << "Time elapsed: "
-              << ((double)(clock() - timer_stack.top())) / CLOCKS_PER_SEC
-              << std::endl;
-    timer_stack.pop();
-}*/
-
 
 /**
  \class	mepp_component_Correspondence_plugin
@@ -176,34 +162,49 @@ class mepp_component_Correspondence_plugin :
 				connect(actionCleanData, SIGNAL(triggered()),this,SLOT(OnCleanData()));
 			}
 			
+			actionSoftICP = new QAction(tr("soft ICP"),this);
+			if( actionSoftICP )
+			{
+				connect(actionSoftICP, SIGNAL(triggered()),this,SLOT(OnSoftICP()));
+			}
+			
+			actionRemeshing = new QAction(tr("Remeshing"),this);
+			if( actionRemeshing )
+			{
+				connect(actionRemeshing, SIGNAL(triggered()),this,SLOT(OnRemesh()));	
+			}		
 		}
 
 		QList<QAction*> actions() const
 		{
-			return QList<QAction*>() << actionPainting
+			return QList<QAction*>() 
+				<< actionPainting
 				<< NULL // menu separator
 				<< actionCorrespondence
 				<< actionShowDescriptor
 				<< actionCut
 				<< actionAddSegment
-				<< actionGlue
-				<< NULL // menu separator
-				<< actionMahalanobis
-				<< NULL // menu separator
-				<< actionSVM
-				<< NULL // menu separator
-				<< actionCompare
+				//<< actionGlue
+				//<< NULL // menu separator
+				//<< actionMahalanobis
+				//<< NULL // menu separator
+				//<< actionSVM
+				//<< NULL // menu separator
+				//<< actionCompare
 				<< NULL // menu separator
 				<< actionLearn
 				<< NULL // menu separator
-				<< actionPrepareData
+				//<< actionPrepareData
 				<< actionUnion
-				<< actionSelBorder
-				<< actionMoveBorder
+				//<< actionSelBorder
+				//<< actionMoveBorder
 				<< actionSaveParts
 				<< actionLoadDescriptor
 				<< NULL
-				<<actionCleanData;
+				<< actionCleanData
+				<< NULL
+				<< actionSoftICP
+				<< actionRemeshing;
 		}
 
 		virtual void pre_draw();
@@ -250,6 +251,9 @@ class mepp_component_Correspondence_plugin :
 		void OnLoadDescriptor();
 		void OnCleanData();
 		
+		void OnSoftICP();
+		void OnRemesh();
+		
   private:
     int m_currentLabel;
     QAction *actionCorrespondence;
@@ -269,6 +273,10 @@ class mepp_component_Correspondence_plugin :
     QAction *actionSaveParts;
     QAction *actionLoadDescriptor;
     QAction *actionCleanData;
+    
+    QAction *actionSoftICP;
+    QAction *actionRemeshing;
+     
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
     

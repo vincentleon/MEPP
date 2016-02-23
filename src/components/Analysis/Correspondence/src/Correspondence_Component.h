@@ -21,9 +21,10 @@
 
 #include "CGAL/Linear_algebraCd.h"
 
+#include "../components/Analysis/Correspondence/src/SegmentController.h"
+
 #include "svm.h"
 
-#include "SegmentController.h"
 
 typedef CGAL::Linear_algebraCd<double>::Matrix myMatrix;
 typedef CGAL::Linear_algebraCd<double>::Vector myVector;

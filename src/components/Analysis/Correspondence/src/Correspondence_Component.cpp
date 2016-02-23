@@ -42,8 +42,6 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 	std::vector<double> points;
 	std::vector<unsigned> faces;
 	std::vector<Vertex_handle> alreadyvisited;
-
-	std::cout << "start initgm" << std::endl;
 	
 	p->set_index_vertices();
 
@@ -933,7 +931,7 @@ double Correspondence_Component::computeEnergy(const std::vector<double> & ellip
 		bool inEllipse = (eqEll<=1);
 
 		bool inSelection = (m_tag[v] <=2);
-
+ 
 		if(inEllipse != inSelection)
 		{
 			double sqrtM = std::sqrt(eqEll) - 1;

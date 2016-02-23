@@ -1,5 +1,5 @@
 #include "SegmentController.h"
-#include "softICPController.h"
+
 #include <set>
 
 #include <viewer.hxx>
@@ -14,12 +14,18 @@
 
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 
+#include "softICPController.h"
+
+
+
 
 SegmentController::SegmentController(PolyhedronPtr p) : m_polyhedron(p)
 {}
 
 SegmentController::~SegmentController()
-{}
+{
+	delete m_icp;
+}
 
 void SegmentController::addMainPart(PolyhedronPtr p)
 {
@@ -52,8 +58,6 @@ double SegmentController::energyBorder(Halfedge_handle prev, Halfedge_handle cur
 	std::vector<double > & currDescr = curr->vertex()->getSemantic();
 	
 	double eExt = L2Dist(prevDescr,currDescr);
-	//return eInt + eExt;
-	//return eInt;
 	return eExt;
 }
 
@@ -1685,7 +1689,7 @@ PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p)
 	return sp;
 }
 
-PolyhedronPtr convertToEnrichedPolyhedron(constructPolyhedron * p)
+PolyhedronPtr 	convertToEnrichedPolyhedron(constructPolyhedron * p)
 {
 	unsigned m = 0;
 	
@@ -1773,19 +1777,27 @@ void collectVertsAndFaces(PolyhedronPtr p, std::vector<double> & coords, std::ve
 
 void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr model, double elasticity, double regionSize, int itermax)
 {
+	
+	
 	model->compute_normals();
 	target->compute_normals();
 	
 	unionSegments(v);
 	
-	softICPController icp(model,target);
-	
-	icp.snapRegions(regionSize,elasticity,itermax,5);
-	
-	icp.remesh(v);
+	m_icp = new softICPController(model,target);
+	//std::cout << "itermax :" << itermax << std::endl;
+	m_icp->snapRegions(regionSize,elasticity,itermax,4);	
 	
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();
+}
+
+void SegmentController::remesh(Viewer* v, PolyhedronPtr target, PolyhedronPtr model)
+{
+	m_icp->remesh(v);
+	
+	v->getScenePtr()->todoIfModeSpace(v,0.0);
+	v->recreateListsAndUpdateGL();	
 }
 
 
@@ -1867,3 +1879,4 @@ void test_softICP_SVD()
 	}
 	
 }
+

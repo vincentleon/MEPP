@@ -1,10 +1,12 @@
 #ifndef SOFTICPCONTROLLER_H
 #define SOFTICPCONTROLLER_H
 
-#include "Correspondence_Polyhedron.h"
 #include <set>
+#include "../components/Analysis/Correspondence/src/Correspondence_Component.h"
 #include "../components/Analysis/Correspondence/src/SegmentController.h"
 #include "../components/Analysis/Correspondence/src/mepp_component_Correspondence_plugin.hxx"
+
+#include "../components/Analysis/Correspondence/src/libicp/matrix.h"
 
 #include "CGAL/Linear_algebraCd.h"
 
@@ -49,6 +51,7 @@ class pointTransformation
 public:
 	qglviewer::Quaternion Q;
 	qglviewer::Vec T;
+	double S;
 };
 
 class softICPController
@@ -159,11 +162,10 @@ private:
 	
 	void cutIntersectedFacets(PolyhedronPtr meshA, PolyhedronPtr meshB);
 	
-	PolyhedronPtr stitchAndSmooth(PolyhedronPtr p, PolyhedronPtr q);
+	PolyhedronPtr stitchAndSmooth(PolyhedronPtr outMesh, PolyhedronPtr inMesh, std::set<Point3d> & borders);
 };
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
-//double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.7, double w2=0.3, double w3=0.0);
 
 
 #endif // SOFTICPCONTROLLER_H
