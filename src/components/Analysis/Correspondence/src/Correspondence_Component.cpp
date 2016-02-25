@@ -67,7 +67,6 @@ void Correspondence_Component::initGeodesicMesh(PolyhedronPtr p)
 		while(++pHalfedge != pFacet->facet_begin());
 	}
 	
-	std::cout << "before geodesic mesh init" << std::endl;
 	// initialize geodesic graph and algorithm
         m_gmesh.initialize_mesh_data(points,faces);
         m_geoAlg = new geodesic::GeodesicAlgorithmExact(&m_gmesh);

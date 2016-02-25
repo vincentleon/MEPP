@@ -1786,7 +1786,7 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 	
 	m_icp = new softICPController(model,target);
 	//std::cout << "itermax :" << itermax << std::endl;
-	m_icp->snapRegions(regionSize,elasticity,itermax,4);	
+	m_icp->snapRegions(regionSize,elasticity,itermax,3);	
 	
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();
@@ -1803,7 +1803,6 @@ void SegmentController::remesh(Viewer* v, PolyhedronPtr target, PolyhedronPtr mo
 
 void test_softICP_SVD()
 {
-	
 	// Create dummy triangle data
 	std::vector<double> coords;
 	std::vector<int> faces;

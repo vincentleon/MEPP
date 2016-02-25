@@ -181,10 +181,12 @@ void softICPController::computeSnappingRegionCorrespondence(bool order)
 	
 	for(auto it = s1->begin(); it!=s1->end();++it)
 	{
+		if(!m_isSnappingRegion[*it]){continue;}
 		double distMin = std::numeric_limits<double>::max();
 		Vertex_handle bestCorres;
 		for(auto c = s2->begin(); c!=s2->end(); ++c)
-		{
+		{if(
+			!m_isSnappingRegion[*c]){continue;}
 			//double dist = computePhiDistance((*it),(*c));
 			double dist = computePhiDistance((*it),(*c),1.0,0.0,0.0);
 			//double dist = computePhiDistance((*it),(*c),0.5,0.1,0.4);
@@ -214,6 +216,42 @@ void softICPController::computeClosest( deformationNode * root, int m, std::vect
 				deformationNode* nodeQ = levelNodes[l][q];
 				//double dist = computePhiDistance(nodeP->m_rep,nodeQ->m_rep,0.5,0.1,0.4);
 				double dist = computePhiDistance(nodeP->m_rep,nodeQ->m_rep,1.0,0.0,0.0);
+				mat->val[p][q] = dist;
+				mat->val[q][p] = dist;
+			}
+		}
+	}
+}
+
+void softICPController::computeClosestGeo( deformationNode * root, int m, std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices, geodesic::Mesh & g)
+{	
+	geodesic::GeodesicAlgorithmDijkstraAlternative * geoAlg = new geodesic::GeodesicAlgorithmDijkstraAlternative(&g);
+	
+	// for l == 0 
+	distanceMatrices.push_back(new Matrix(1,1));
+	
+	for(unsigned l=1; l<levelNodes.size();++l)
+	{
+		int sizeLevel = levelNodes[l].size();
+		distanceMatrices.push_back(new Matrix(sizeLevel,sizeLevel));
+		Matrix * mat = distanceMatrices.back();
+		
+		for(unsigned p=0;p<sizeLevel;++p)
+		{
+			int index = levelNodes[l][p]->m_rep->tag();
+			
+			std::vector<geodesic::SurfacePoint> sources;
+			geodesic::SurfacePoint gp(&g.vertices()[index]);
+			sources.push_back(gp);
+		
+			geoAlg->propagate(sources);
+			
+			for(unsigned q=0;q<p;++q)
+			{
+				int idx = levelNodes[l][q]->m_rep->tag();
+				double dist;
+				geodesic::SurfacePoint gq(&g.vertices()[idx]);
+				geoAlg->best_source(gq,dist);
 				mat->val[p][q] = dist;
 				mat->val[q][p] = dist;
 			}
@@ -251,8 +289,7 @@ void softICPController::initClosest(std::vector< std::vector<deformationNode*> >
 }
 
 void softICPController::storeNodeLevel(deformationNode* root, int level, std::vector< std::vector<deformationNode*> > & levelNodes)
-{
-	//std::cout << level << " size : " << root->m_vertices.size() << std::endl;
+{	
 	if(levelNodes.size()<=level){ levelNodes.resize(level+1);}
 	levelNodes[level].push_back(root);
 	for(unsigned c=0;c<root->m_childrenNodes.size();++c)
@@ -285,33 +322,12 @@ double softICPController::computeDelta(bool order)
 
 void softICPController::buildTreeStructure(const int sizeOfTree,double R, double squared_euclidean_radius)
 {
-	// Identify the snapping region on the two meshes
-	//std::cout << "\n\t\tget Snapping region ";
-	//timer_tic();
-	//getSnappingRegionOld(R,squared_euclidean_radius);
-	
-	std::cout << "size of tree : " << sizeOfTree << std::endl;	
-	
 	getSnappingRegionAABB();
 	m_polyhedron1->compute_normals();
 	m_polyhedron2->compute_normals();
-	//timer_toc();
-	R = m_R;
 	
-	//std::cout << "\t\thierarchicalBuild " << std::endl;
-	//timer_tic();
-	//#pragma omp parallel sections
-	//{
-	//	#pragma omp section
-	//	{
-			hierarchicalBuild(&m_treeStructure1,sizeOfTree,0,4);
-	//	}
-	//	#pragma omp section
-	//	{
-			hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
-	//	}
-	//}
-	//timer_toc();
+	hierarchicalBuild(&m_treeStructure1,sizeOfTree,0,4);
+	hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
 	
 	// Init. root nodes properly
 	m_treeStructure1.m_parent = NULL;
@@ -319,6 +335,38 @@ void softICPController::buildTreeStructure(const int sizeOfTree,double R, double
 	m_treeStructure1.m_clusterID = -1;
 	m_treeStructure2.m_clusterID = -1;
 }
+
+void softICPController::buildFullTreeStructure(const int sizeOfTree, const double factor)
+{
+	
+	//getSnappingRegion(factor);
+	std::cout << "getSnappingRegion geodesic: " << std::endl;
+	timer_tic();
+	getSnappingRegionGeo(factor);
+	timer_toc();
+	
+	m_polyhedron1->compute_normals();
+	m_polyhedron2->compute_normals();
+	
+	//std::cout << "structure 1 : " << m_treeStructure1.m_vertices.size() << std::endl;
+	//std::cout << "structure 2 : " << m_treeStructure2.m_vertices.size() << std::endl;
+	
+	std::cout << "Hierarchical build : " << std::endl;
+	timer_tic();
+	hierarchicalBuild(&m_treeStructure1,sizeOfTree,0,4);
+	hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
+	timer_toc();
+	
+	// Init. root nodes properly
+	m_treeStructure1.m_parent = NULL;
+	m_treeStructure2.m_parent = NULL;
+	m_treeStructure1.m_clusterID = -1;
+	m_treeStructure2.m_clusterID = -1;
+	
+	//colorLastClusters(&m_treeStructure1);
+	//colorLastClusters(&m_treeStructure2);
+}
+
 
 void softICPController::colorLastClusters(deformationNode* root)
 {
@@ -339,6 +387,8 @@ void softICPController::colorLastClusters(deformationNode* root)
 void softICPController::hierarchicalBuild(deformationNode* root, const int sizeOfTree, int level, int k)
 {
 	root->m_level = level;
+	
+	//std::cout << "level : " << level << " nbVertices : " << root->m_vertices.size() << std::endl;
 	
 	if(level != sizeOfTree)
 	{
@@ -370,6 +420,7 @@ void softICPController::colorCluster(deformationNode* root)
 {
 	if(root->m_childrenNodes.size() != 4)
 	{
+		std::cout << "size of leaf : " << root->m_childrenNodes.size() << std::endl;
 		return;
 	}
 	for(auto h = root->m_childrenNodes[0]->m_vertices.begin(); 
@@ -400,19 +451,6 @@ void softICPController::colorCluster(deformationNode* root)
 
 void softICPController::getSnappingRegionAABB()
 {
-	/*std::cout << "facets2 : " << m_polyhedron2->size_of_facets() << std::endl;
-	std::cout << "vertices2 : " << m_polyhedron2->size_of_facets() << std::endl;
-	for(auto pFacet = m_polyhedron2->facets_begin(); pFacet != m_polyhedron2->facets_end(); ++pFacet)
-	{
-		Halfedge_handle h = pFacet->halfedge();
-		if(!h->is_border())
-		{
-			m_polyhedron2->create_center_vertex(h);
-		}
-	}
-	std::cout << "facets2 : " << m_polyhedron2->size_of_facets() << std::endl;
-	std::cout << "vertices2 : " << m_polyhedron2->size_of_facets() << std::endl;*/
-	
 	// First, normalize boundary edges order
 	m_polyhedron1->normalize_border();
 	m_polyhedron2->normalize_border();
@@ -570,7 +608,7 @@ void softICPController::getSnappingRegionAABB()
 		distToLoop = sqrt(distToLoop);
 		if(distToLoop < m_R)
 		{
-			pVertex->color(1.0,1.0,0.0);
+// 			//pVertex->color(1.0,1.0,0.0);
 			m_distToLoop[pVertex] = distToLoop;
 			m_treeStructure1.m_vertices.insert(pVertex);
 			m_isSnappingRegion[pVertex] = true;
@@ -594,7 +632,7 @@ void softICPController::getSnappingRegionAABB()
 		distToLoop = sqrt(distToLoop);
 		if(distToLoop < m_R)
 		{
-			pVertex->color(1.0,1.0,0.0);
+			//pVertex->color(1.0,1.0,0.0);
 			m_distToLoop[pVertex] = distToLoop;
 			m_treeStructure2.m_vertices.insert(pVertex);
 			m_isSnappingRegion[pVertex] = true;
@@ -667,27 +705,26 @@ void softICPController::getSnappingRegionAABB()
 	} while ( g++ != E2);
 }
 
-
-void softICPController::getSnappingRegionOld(double R, double squared_euclidean_radius)
+void softICPController::getSnappingRegion(const double factor)
 {
 	// First, normalize boundary edges order
 	m_polyhedron1->normalize_border();
 	m_polyhedron2->normalize_border();
-	
+
 	// Then we find the two border halfedges that are the closest to each other
 	double distMin = std::numeric_limits<double>::max();
 	Halfedge_handle border1,border2;
-	
+
 	//#pragma omp parallel for private(b1)
 	for(auto b1 = m_polyhedron1->border_halfedges_begin(); b1!=m_polyhedron1->halfedges_end();++b1)
 	{
-		b1->vertex()->color(1,0,0);
+		//b1->vertex()->color(1,0,0);
 		Point3d p1 = b1->vertex()->point();
 		Halfedge_iterator closestToP1;
 		double distMinToP1 = std::numeric_limits<double>::max();
 		for(auto b2 = m_polyhedron2->border_halfedges_begin(); b2!=m_polyhedron2->halfedges_end();++b2)
 		{
-			b2->vertex()->color(0,0,1);
+			//b2->vertex()->color(0,0,1);
 			Point3d p2 = b2->vertex()->point();
 			double dist = CGAL::squared_distance(p1,p2);
 			if(dist<distMinToP1)
@@ -704,140 +741,722 @@ void softICPController::getSnappingRegionOld(double R, double squared_euclidean_
 		}
 	}
 	// Border 1 and border2 are on the two closest boundary loops
-	
-	// Define the snapping region
-	Vertex_handle v1 = border1->vertex();
-	semanticDescr & sd1 = v1->getSemantic();
-	Vertex_handle v2 = border2->vertex();
-	semanticDescr & sd2 = v2->getSemantic();
-	
-	Point3d center = border2->vertex()->point();
-	
-		/*Halfedge_handle it = border1;
-		do{
-			Halfedge_handle next;
-			Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
-			do
+
+	std::vector<Vertex_handle> closestToB1;
+	std::vector<Vertex_handle> closestToB2;
+
+	std::vector<Vertex_handle> loop1;
+	std::vector<Vertex_handle> loop2;
+
+	AABB_Tree tree1(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
+	AABB_Tree tree2(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
+
+	tree1.accelerate_distance_queries();
+	tree2.accelerate_distance_queries();
+
+
+	const double double_max = numeric_limits<double>::max();
+
+	// Find the set of closest points to the other shapes B-loop
+	Halfedge_handle it = border1;
+	do{
+		loop1.push_back(it->vertex());
+		m_loop1.push_back(it);
+		// find the vertex closest to it->vertex() in m_polyhedron2
+		Point_and_primitive_id pp = tree2.closest_point_and_primitive(it->vertex()->point());
+		Facet_iterator f_nearest = pp.second;
+		closestToB1.push_back(f_nearest->facet_begin()->vertex());
+
+		// progress alongside border
+		Halfedge_handle next;
+		Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
+		do
+		{
+			if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
 			{
-				if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
-				{
-					next = hC->opposite();
-					break;
-				}
-				
+				next = hC->opposite();
+				break;
 			}
-			while(++hC!=it->vertex()->vertex_begin());
-			it->vertex()->color(1,1,0);
-			it = next;
+
 		}
-		while(it!=border1);*/
-	//#pragma omp parallel for private(pHalfedge)
-	for(auto pHalfedge = m_polyhedron1->halfedges_begin();pHalfedge!=m_polyhedron1->halfedges_end();++pHalfedge)
-	{
- 		Point3d p = pHalfedge->vertex()->point();
-		//if( CGAL::squared_distance(center,p) < squared_euclidean_radius)
-		//{	// point is candidate for semantic descriptor testing
-			//pHalfedge->vertex()->color(0,1,0);
-			semanticDescr & heDescr = pHalfedge->vertex()->getSemantic();
-			
-			Halfedge_handle prec = border1;
-			Halfedge_handle it = border1;
-			
-			int bc = 0;
-			
-			do{
-				semanticDescr & borderDescr = it->vertex()->getSemantic();
-				//double distToLoop = L2Dist(heDescr,borderDescr);
-				double distToLoop = CGAL::squared_distance(pHalfedge->vertex()->point(),it->vertex()->point());
-				distToLoop = sqrt(distToLoop);
-				
-				if(distToLoop<R)
-				{
-					m_treeStructure1.m_vertices.insert(pHalfedge->vertex());
-					//pHalfedge->vertex()->color(1,1,0);
-					if(!m_distToLoop.count(pHalfedge->vertex()))
-					{
-						m_distToLoop[pHalfedge->vertex()] = distToLoop;
-					}
-					else if (m_distToLoop[pHalfedge->vertex()] > distToLoop)
-					{
-						m_distToLoop[pHalfedge->vertex()] = distToLoop;
-					}
-				}
-				
-				//progress alongside border
-				Halfedge_handle next;
-				Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
-				do
-				{
-					if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
-					{
-						next = hC->opposite();
-						break;
-					}
-					
-				}
-				while(++hC!=it->vertex()->vertex_begin());
-				
-				it = next;
-				}
-			while(it!=border1);
-		//}
+		while(++hC!=it->vertex()->vertex_begin());
+
+		it = next;
 	}
-	////////////////////////////////////////////////////////////////////
-	center = border1->vertex()->point();
-	for(auto pHalfedge = m_polyhedron2->halfedges_begin();pHalfedge!=m_polyhedron2->halfedges_end();++pHalfedge)
-	{
- 		Point3d p = pHalfedge->vertex()->point();
-		//if( CGAL::squared_distance(center,p) < squared_euclidean_radius)
-		//{	// point is candidate for semantic descriptor testing
-			//pHalfedge->vertex()->color(0,1,0);
-			semanticDescr & heDescr = pHalfedge->vertex()->getSemantic();
-			
-			Halfedge_handle it = border2;
-			Halfedge_handle prec = border2;
-			
-			do{
-				//it->vertex()->color(1,1,0);
-				semanticDescr & borderDescr = it->vertex()->getSemantic();
-				
-				//double distToLoop = L2Dist(heDescr,borderDescr);
-				double distToLoop = CGAL::squared_distance(pHalfedge->vertex()->point(),it->vertex()->point());
-				distToLoop = sqrt(distToLoop);
-				
-				if(distToLoop<R)
-				{
-					m_treeStructure2.m_vertices.insert(pHalfedge->vertex());
-					//pHalfedge->vertex()->color(1,1,0);
-					if(!m_distToLoop.count(pHalfedge->vertex()))
-					{
-						m_distToLoop[pHalfedge->vertex()] = distToLoop;
-					}
-					else if (m_distToLoop[pHalfedge->vertex()] > distToLoop)
-					{
-						m_distToLoop[pHalfedge->vertex()] = distToLoop;
-					}
-				}
-				//progress alongside border
-				
-				Halfedge_handle next;
-				Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
-				do
-				{
-					if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
-					{
-						next = hC->opposite();
-						break;
-					}
-					
-				}
-				while(++hC!=it->vertex()->vertex_begin());
-				//it->vertex()->color(1,1,0);
-				it = next;
+	while(it!=border1);
+
+	it = border2;
+	do{
+		loop2.push_back(it->vertex());
+		m_loop2.push_back(it);
+		// find the vertex closest to it->vertex() in m_polyhedron2
+		Point_and_primitive_id pp = tree1.closest_point_and_primitive(it->vertex()->point());
+		Facet_iterator f_nearest = pp.second;
+		closestToB2.push_back(f_nearest->facet_begin()->vertex());
+
+		// progress alongside border
+		Halfedge_handle next;
+		Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
+		do
+		{
+			if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
+			{
+				next = hC->opposite();
+				break;
 			}
-			while(it!=border2);
-		//}
-	}	
+
+		}
+		while(++hC!=it->vertex()->vertex_begin());
+		it = next;
+	}
+	while(it!=border2);
+
+	// compute for each point in the two sets, compute the distance to the other shapes b-loop
+	double R = 0.0;
+	for(int i=0;i<closestToB2.size();++i)
+	{
+		Point3d p = closestToB2[i]->point();
+		double closest = std::numeric_limits<double>::max();
+		for(int b=0;b<loop1.size();++b)
+		{
+			Point3d q = loop1[b]->point();
+			double dist = CGAL::squared_distance(p,q);
+			if(dist<closest)
+			{
+				closest = dist;
+			}
+		}
+		if(closest>R){R = closest;}
+	}
+	for(int i=0;i<closestToB1.size();++i)
+	{
+		Point3d p = closestToB1[i]->point();
+		double closest = std::numeric_limits<double>::max();
+		for(int b=0;b<loop2.size();++b)
+		{
+			Point3d q = loop2[b]->point();
+			double dist = CGAL::squared_distance(p,q);
+			if(dist<closest)
+			{
+				closest = dist;
+			}
+		}
+		if(closest>R){R = closest;}
+	}
+	m_R = sqrt(R);
+
+	double factoredR = m_R;
+
+	if(factor>1.0)
+	{
+		factoredR*=factor;
+	}
+
+	// R is the maximum of these distances
+	// The SR is the submesh within R distance to the boundary loop
+	for(auto pVertex = m_polyhedron1->vertices_begin();
+	    pVertex != m_polyhedron1->vertices_end();
+		++pVertex)
+	{
+		Point3d p = pVertex->point();
+		double distToLoop = std::numeric_limits<double>::max();
+		for(auto b=loop1.begin();b!=loop1.end();++b)
+		{
+			double dist = CGAL::squared_distance(p,(*b)->point());
+			if(dist<distToLoop)
+			{
+				distToLoop = dist;
+			}
+		}
+		distToLoop = sqrt(distToLoop);
+		if(distToLoop < m_R)
+		{
+			pVertex->color(1.0,1.0,0.0);
+			m_distToLoop[pVertex] = distToLoop;
+			m_treeStructure1.m_vertices.insert(pVertex);
+			m_isSnappingRegion[pVertex] = true;
+			m_isFactoredRegion[pVertex] = true;
+		}
+		//else if(distToLoop < factoredR)
+		else
+		{
+			pVertex->color(1.0,0.0,0.0);
+			m_distToLoop[pVertex] = distToLoop;
+			m_treeStructure1.m_vertices.insert(pVertex);
+			m_isFactoredRegion[pVertex] = true;
+		}
+	}
+
+	for(auto pVertex = m_polyhedron2->vertices_begin();
+	    pVertex != m_polyhedron2->vertices_end();
+		++pVertex)
+	{
+		Point3d p = pVertex->point();
+		double distToLoop = std::numeric_limits<double>::max();
+		for(auto b=loop2.begin();b!=loop2.end();++b)
+		{
+			double dist = CGAL::squared_distance(p,(*b)->point());
+			if(dist<distToLoop)
+			{
+				distToLoop = dist;
+			}
+		}
+		distToLoop = sqrt(distToLoop);
+		if(distToLoop < m_R)
+		{
+			pVertex->color(1.0,1.0,0.0);
+			m_distToLoop[pVertex] = distToLoop;
+			m_treeStructure2.m_vertices.insert(pVertex);
+			m_isSnappingRegion[pVertex] = true;
+			m_isFactoredRegion[pVertex] = true;
+		}
+		//else if(distToLoop < factoredR)
+		else
+		{
+			pVertex->color(1.0,0.0,0.0);
+			m_distToLoop[pVertex] = distToLoop;
+			m_treeStructure2.m_vertices.insert(pVertex);
+			m_isFactoredRegion[pVertex] = true;
+		}
+
+	}
+
+	Facet_iterator B1 = m_polyhedron1->facets_begin();
+	Facet_iterator E1 = m_polyhedron1->facets_end(); --E1;
+
+	Facet_iterator B2 = m_polyhedron2->facets_begin();
+	Facet_iterator E2 = m_polyhedron2->facets_end(); --E2;
+
+	Facet_iterator f = B1;
+	do {
+		int countFR = 0;
+		int countSR = 0;
+		auto hC = f->facet_begin();
+		do
+		{
+			//if(m_isFactoredRegion[hC->vertex()]){countFR++;}
+			if(m_isSnappingRegion[hC->vertex()]){countSR++;}
+		}
+		while(++hC!=f->facet_begin());
+		if(countSR == 3)
+		{
+			double distToLoop = double_max;
+			Halfedge_handle h = create_center_vertex(m_polyhedron1,f);
+			Vertex_handle p = h->vertex();
+			m_isFactoredRegion[p] = true;
+			m_treeStructure1.m_vertices.insert(p);
+			for(auto b=loop1.begin();b!=loop1.end();++b)
+			{
+				double dist = CGAL::squared_distance(p->point(),(*b)->point());
+				if(dist<distToLoop)
+				{
+					distToLoop = dist;
+				}
+			}
+			distToLoop = sqrt(distToLoop);
+			m_distToLoop[h->vertex()] = distToLoop;
+			if(countSR == 3){m_isSnappingRegion[p]=true;}
+		}
+	} while ( f++ != E1);
+
+	Facet_iterator g = B2;
+	do {
+		int countFR = 0;
+		int countSR = 0;
+		auto hC = g->facet_begin();
+		do
+		{
+			//if(m_isFactoredRegion[hC->vertex()]){countFR++;}
+			if(m_isSnappingRegion[hC->vertex()]){countSR++;}
+		}
+		while(++hC!=g->facet_begin());
+		if(countSR == 3)
+		{
+			double distToLoop = double_max;
+			Halfedge_handle h = create_center_vertex(m_polyhedron2,g);
+			Vertex_handle p = h->vertex();
+			m_isSnappingRegion[p] = true;
+			m_treeStructure2.m_vertices.insert(p);
+
+			for(auto b=loop2.begin();b!=loop2.end();++b)
+			{
+				double dist = CGAL::squared_distance(p->point(),(*b)->point());
+				if(dist<distToLoop)
+				{
+					distToLoop = dist;
+				}
+			}
+			distToLoop = sqrt(distToLoop);
+			m_distToLoop[p] = distToLoop;
+			if(countSR == 3){m_isSnappingRegion[p]=true;}
+		}
+	} while ( g++ != E2);
+}
+
+void softICPController::getSnappingRegionGeo()
+{
+	//std::cout << "Before initGeodesicMesh" << std::endl;
+	// initialize geodesic graph and algorithm
+	initGeodesicMesh(m_polyhedron1,&m_g1);
+	
+	//std::cout << "After initGeodesicMesh" << std::endl;
+	
+	// First, normalize boundary edges order
+	m_polyhedron1->normalize_border();
+	m_polyhedron2->normalize_border();
+
+	// Then we find the two border halfedges that are the closest to each other
+	double distMin = std::numeric_limits<double>::max();
+	Halfedge_handle border1,border2;
+
+	//#pragma omp parallel for private(b1)
+	for(auto b1 = m_polyhedron1->border_halfedges_begin(); b1!=m_polyhedron1->halfedges_end();++b1)
+	{
+		//b1->vertex()->color(1,0,0);
+		Point3d p1 = b1->vertex()->point();
+		Halfedge_iterator closestToP1;
+		double distMinToP1 = std::numeric_limits<double>::max();
+		for(auto b2 = m_polyhedron2->border_halfedges_begin(); b2!=m_polyhedron2->halfedges_end();++b2)
+		{
+			//b2->vertex()->color(0,0,1);
+			Point3d p2 = b2->vertex()->point();
+			double dist = CGAL::squared_distance(p1,p2);
+			if(dist<distMinToP1)
+			{
+				distMinToP1 = dist;
+				closestToP1 = b2;
+			}
+		}
+		if(distMinToP1<distMin)
+		{
+			border1 = b1;
+			border2 = closestToP1;
+			distMin = distMinToP1;
+		}
+	}
+	// Border 1 and border2 are on the two closest boundary loops
+
+	std::vector<Vertex_handle> closestToB1;
+	std::vector<Vertex_handle> closestToB2;
+
+	std::vector<Vertex_handle> loop1;
+	std::vector<Vertex_handle> loop2;
+
+	AABB_Tree tree1(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
+	AABB_Tree tree2(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
+
+	tree1.accelerate_distance_queries();
+	tree2.accelerate_distance_queries();
+
+
+	const double double_max = numeric_limits<double>::max();
+
+	// Find the set of closest points to the other shapes B-loop
+	Halfedge_handle it = border1;
+	do{
+		loop1.push_back(it->vertex());
+		m_loop1.push_back(it);
+		// find the vertex closest to it->vertex() in m_polyhedron2
+		Point_and_primitive_id pp = tree2.closest_point_and_primitive(it->vertex()->point());
+		Facet_iterator f_nearest = pp.second;
+		closestToB1.push_back(f_nearest->facet_begin()->vertex());
+
+		// progress alongside border
+		Halfedge_handle next;
+		Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
+		do
+		{
+			if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
+			{
+				next = hC->opposite();
+				break;
+			}
+		}
+		while(++hC!=it->vertex()->vertex_begin());
+
+		it = next;
+	}
+	while(it!=border1);
+
+	it = border2;
+	do{
+		loop2.push_back(it->vertex());
+		m_loop2.push_back(it);
+		// find the vertex closest to it->vertex() in m_polyhedron2
+		Point_and_primitive_id pp = tree1.closest_point_and_primitive(it->vertex()->point());
+		Facet_iterator f_nearest = pp.second;
+		closestToB2.push_back(f_nearest->facet_begin()->vertex());
+
+		// progress alongside border
+		Halfedge_handle next;
+		Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
+		do
+		{
+			if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
+			{
+				next = hC->opposite();
+				break;
+			}
+
+		}
+		while(++hC!=it->vertex()->vertex_begin());
+		it = next;
+	}
+	while(it!=border2);
+	
+	geodesic::GeodesicAlgorithmDijkstraAlternative * alg1 = new geodesic::GeodesicAlgorithmDijkstraAlternative(&m_g1);
+	// compute for each point in the two sets the geodesic distance to the shape's b-loop
+	std::vector<geodesic::SurfacePoint> sources1;
+	std::vector<geodesic::SurfacePoint> sources2;
+	
+	for(unsigned i=0;i<loop1.size();++i)
+	{
+		int index = loop1[i]->tag();
+		geodesic::SurfacePoint gp(&m_g1.vertices()[index]);
+		sources1.push_back(gp);
+	}
+	alg1->propagate(sources1);
+	// For every vertex, geodesic distance to the boundary loop
+	for(auto pVertex = m_polyhedron1->vertices_begin(); pVertex!=m_polyhedron1->vertices_end(); ++pVertex)
+	{
+		geodesic::SurfacePoint gp(&m_g1.vertices()[pVertex->tag()]);
+		double distance;
+		alg1->best_source(gp,distance);
+		m_distToLoop[pVertex] = distance;
+		m_treeStructure1.m_vertices.insert(pVertex);
+	}
+	//delete alg1;
+	
+	initGeodesicMesh(m_polyhedron2,&m_g2);
+	geodesic::GeodesicAlgorithmDijkstraAlternative * alg2 = new geodesic::GeodesicAlgorithmDijkstraAlternative(&m_g2);
+	for(unsigned i=0;i<loop2.size();++i)
+	{
+		int index = loop2[i]->tag();
+		geodesic::SurfacePoint gp(&m_g2.vertices()[index]);
+		sources2.push_back(gp);
+	}
+	alg2->propagate(sources2);
+	for(auto pVertex = m_polyhedron2->vertices_begin(); pVertex!=m_polyhedron2->vertices_end(); ++pVertex)
+	{
+		geodesic::SurfacePoint gp(&m_g2.vertices()[pVertex->tag()]);
+		double distance;
+		alg2->best_source(gp,distance);
+		m_distToLoop[pVertex] = distance;
+		m_treeStructure2.m_vertices.insert(pVertex);
+	}
+	//delete alg2;
+
+	
+	// m_R is the largest distance among the vertices in the snapping region
+	double sR = 0.0;
+	for(int i=0; i<closestToB2.size();i++)
+	{
+		double dist = m_distToLoop[closestToB2[i]];
+		if(dist > sR) {sR = dist;}
+	}
+	for(int i=0; i<closestToB1.size();i++)
+	{
+		double dist = m_distToLoop[closestToB1[i]];
+		if(dist < sR) {sR = dist;}
+	}
+	m_R = sqrt(sR);
+	
+	//The snapping region is the submesh within R geodesic distance to the b-loop
+	for(auto pVertex = m_polyhedron1->vertices_begin();
+		pVertex != m_polyhedron1->vertices_end();
+		++pVertex)
+	{
+		double dist = m_distToLoop[pVertex];
+		if(dist < m_R)
+		{
+			m_isSnappingRegion[pVertex]=true;
+			m_sr1.push_back(pVertex);
+			pVertex->color(1,0,0);
+		}
+	}
+	for(auto pVertex = m_polyhedron2->vertices_begin();
+		pVertex != m_polyhedron2->vertices_end();
+		++pVertex)
+	{
+		double dist = m_distToLoop[pVertex];
+		if(dist < m_R)
+		{
+			m_isSnappingRegion[pVertex]=true;
+			m_sr2.push_back(pVertex);
+			pVertex->color(1,0,0);
+		}
+	}
+	computeSnapRegionDistances();
+	delete alg1;
+	delete alg2;
+}
+
+void softICPController::getSnappingRegionGeo(const double factor)
+{
+	initGeodesicMesh(m_polyhedron1,&m_g1);
+	
+	//std::cout << "After initGeodesicMesh" << std::endl;
+	
+	// First, normalize boundary edges order
+	m_polyhedron1->normalize_border();
+	m_polyhedron2->normalize_border();
+
+	// Then we find the two border halfedges that are the closest to each other
+	double distMin = std::numeric_limits<double>::max();
+	Halfedge_handle border1,border2;
+
+	//#pragma omp parallel for private(b1)
+	for(auto b1 = m_polyhedron1->border_halfedges_begin(); b1!=m_polyhedron1->halfedges_end();++b1)
+	{
+		//b1->vertex()->color(1,0,0);
+		Point3d p1 = b1->vertex()->point();
+		Halfedge_iterator closestToP1;
+		double distMinToP1 = std::numeric_limits<double>::max();
+		for(auto b2 = m_polyhedron2->border_halfedges_begin(); b2!=m_polyhedron2->halfedges_end();++b2)
+		{
+			//b2->vertex()->color(0,0,1);
+			Point3d p2 = b2->vertex()->point();
+			double dist = CGAL::squared_distance(p1,p2);
+			if(dist<distMinToP1)
+			{
+				distMinToP1 = dist;
+				closestToP1 = b2;
+			}
+		}
+		if(distMinToP1<distMin)
+		{
+			border1 = b1;
+			border2 = closestToP1;
+			distMin = distMinToP1;
+		}
+	}
+	// Border 1 and border2 are on the two closest boundary loops
+
+	std::vector<Vertex_handle> closestToB1;
+	std::vector<Vertex_handle> closestToB2;
+
+	std::vector<Vertex_handle> loop1;
+	std::vector<Vertex_handle> loop2;
+
+	AABB_Tree tree1(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
+	AABB_Tree tree2(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
+
+	tree1.accelerate_distance_queries();
+	tree2.accelerate_distance_queries();
+
+
+	const double double_max = numeric_limits<double>::max();
+
+	// Find the set of closest points to the other shapes B-loop
+	Halfedge_handle it = border1;
+	do{
+		loop1.push_back(it->vertex());
+		m_loop1.push_back(it);
+		// find the vertex closest to it->vertex() in m_polyhedron2
+		Point_and_primitive_id pp = tree2.closest_point_and_primitive(it->vertex()->point());
+		Facet_iterator f_nearest = pp.second;
+		closestToB1.push_back(f_nearest->facet_begin()->vertex());
+
+		// progress alongside border
+		Halfedge_handle next;
+		Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
+		do
+		{
+			if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
+			{
+				next = hC->opposite();
+				break;
+			}
+		}
+		while(++hC!=it->vertex()->vertex_begin());
+
+		it = next;
+	}
+	while(it!=border1);
+
+	it = border2;
+	do{
+		loop2.push_back(it->vertex());
+		m_loop2.push_back(it);
+		// find the vertex closest to it->vertex() in m_polyhedron2
+		Point_and_primitive_id pp = tree1.closest_point_and_primitive(it->vertex()->point());
+		Facet_iterator f_nearest = pp.second;
+		closestToB2.push_back(f_nearest->facet_begin()->vertex());
+
+		// progress alongside border
+		Halfedge_handle next;
+		Halfedge_around_vertex_circulator hC = it->vertex()->vertex_begin();
+		do
+		{
+			if(hC->opposite()->is_border_edge() && hC->opposite()!=it->opposite())
+			{
+				next = hC->opposite();
+				break;
+			}
+
+		}
+		while(++hC!=it->vertex()->vertex_begin());
+		it = next;
+	}
+	while(it!=border2);
+	
+	geodesic::GeodesicAlgorithmDijkstraAlternative * alg1 = new geodesic::GeodesicAlgorithmDijkstraAlternative(&m_g1);
+	// compute for each point in the two sets the geodesic distance to the shape's b-loop
+	std::vector<geodesic::SurfacePoint> sources1;
+	std::vector<geodesic::SurfacePoint> sources2;
+	
+	for(unsigned i=0;i<loop1.size();++i)
+	{
+		int index = loop1[i]->tag();
+		geodesic::SurfacePoint gp(&m_g1.vertices()[index]);
+		sources1.push_back(gp);
+	}
+	alg1->propagate(sources1);
+	// For every vertex, geodesic distance to the boundary loop
+	for(auto pVertex = m_polyhedron1->vertices_begin(); pVertex!=m_polyhedron1->vertices_end(); ++pVertex)
+	{
+		geodesic::SurfacePoint gp(&m_g1.vertices()[pVertex->tag()]);
+		double distance;
+		alg1->best_source(gp,distance);
+		m_distToLoop[pVertex] = distance;
+		//m_treeStructure1.m_vertices.insert(pVertex);
+	}
+	//delete alg1;
+	
+	initGeodesicMesh(m_polyhedron2,&m_g2);
+	geodesic::GeodesicAlgorithmDijkstraAlternative * alg2 = new geodesic::GeodesicAlgorithmDijkstraAlternative(&m_g2);
+	for(unsigned i=0;i<loop2.size();++i)
+	{
+		int index = loop2[i]->tag();
+		geodesic::SurfacePoint gp(&m_g2.vertices()[index]);
+		sources2.push_back(gp);
+	}
+	alg2->propagate(sources2);
+	for(auto pVertex = m_polyhedron2->vertices_begin(); pVertex!=m_polyhedron2->vertices_end(); ++pVertex)
+	{
+		geodesic::SurfacePoint gp(&m_g2.vertices()[pVertex->tag()]);
+		double distance;
+		alg2->best_source(gp,distance);
+		m_distToLoop[pVertex] = distance;
+		//m_treeStructure2.m_vertices.insert(pVertex);
+	}
+	//delete alg2;
+
+	
+	// m_R is the largest distance among the vertices in the snapping region
+	double sR = 0.0;
+	for(int i=0; i<closestToB2.size();i++)
+	{
+		double dist = m_distToLoop[closestToB2[i]];
+		if(dist > sR) {sR = dist;}
+	}
+	for(int i=0; i<closestToB1.size();i++)
+	{
+		double dist = m_distToLoop[closestToB1[i]];
+		if(dist < sR) {sR = dist;}
+	}
+	m_R = sqrt(sR);
+	
+	double factoredR = m_R;
+	if(factor>1)
+	{
+		factoredR*=factor;
+	}
+		
+	
+	//The snapping region is the submesh within R geodesic distance to the b-loop
+	for(auto pVertex = m_polyhedron1->vertices_begin();
+		pVertex != m_polyhedron1->vertices_end();
+		++pVertex)
+	{
+		double dist = m_distToLoop[pVertex];
+		if(dist <= m_R)
+		{
+			m_isSnappingRegion[pVertex]=true;
+			m_sr1.push_back(pVertex);
+			pVertex->color(1,0,0);
+			m_treeStructure1.m_vertices.insert(pVertex);
+		}
+		else if( dist < factoredR)
+		{
+			m_treeStructure1.m_vertices.insert(pVertex);
+			m_isFactoredRegion[pVertex] = true;
+			pVertex->color(1,1,0);
+		}
+	}
+	for(auto pVertex = m_polyhedron2->vertices_begin();
+		pVertex != m_polyhedron2->vertices_end();
+		++pVertex)
+	{
+		double dist = m_distToLoop[pVertex];
+		if(dist < m_R)
+		{
+			m_treeStructure2.m_vertices.insert(pVertex);
+			m_isSnappingRegion[pVertex]=true;
+			m_sr2.push_back(pVertex);
+			pVertex->color(1,0,0);
+		}
+		else if( dist < factoredR)
+		{
+			m_treeStructure2.m_vertices.insert(pVertex);
+			m_isFactoredRegion[pVertex] = true;
+			pVertex->color(1,1,0);
+		}
+	}
+	computeSnapRegionDistances();
+	delete alg1;
+	delete alg2;
+}
+
+void softICPController::computeSnapRegionDistances()
+{
+	std::vector<geodesic::SurfacePoint> sources1;
+	std::vector<geodesic::SurfacePoint> sources2;
+	
+	geodesic::GeodesicAlgorithmExact * alg1 = new geodesic::GeodesicAlgorithmExact(&m_g1);
+	for(unsigned i=0;i<m_sr1.size();++i)
+	{
+		int index = m_sr1[i]->tag();
+		geodesic::SurfacePoint gp(&m_g1.vertices()[index]);
+		sources1.push_back(gp);
+	}
+	alg1->propagate(sources1);
+	for(auto pVertex = m_polyhedron1->vertices_begin();
+		pVertex!=m_polyhedron1->vertices_end();
+		++pVertex)
+	{
+		if(!m_isSnappingRegion[pVertex] && m_isFactoredRegion[pVertex])
+		{
+			double dist;
+			geodesic::SurfacePoint gp(&m_g1.vertices()[pVertex->tag()]);
+			alg1->best_source(gp,dist);
+			m_distToSnap[pVertex] = dist;
+		}
+	}
+	
+	
+	geodesic::GeodesicAlgorithmExact * alg2 = new geodesic::GeodesicAlgorithmExact(&m_g2);
+	for(unsigned i=0;i<m_sr2.size();++i)
+	{
+		int index = m_sr2[i]->tag();
+		geodesic::SurfacePoint gp(&m_g2.vertices()[index]);
+		sources2.push_back(gp);
+	}
+	alg2->propagate(sources2);
+	for(auto pVertex = m_polyhedron2->vertices_begin();
+		pVertex!=m_polyhedron2->vertices_end();
+		++pVertex)
+	{
+		if(!m_isSnappingRegion[pVertex] && m_isFactoredRegion[pVertex])
+		{
+			double dist;
+			geodesic::SurfacePoint gp(&m_g2.vertices()[pVertex->tag()]);
+			alg2->best_source(gp,dist);
+			m_distToSnap[pVertex] = dist;
+		}
+	}
+	delete alg1;
+	delete alg2;
 }
 
 void softICPController::cluster(deformationNode* root)
@@ -1016,32 +1635,32 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 	//std::cout << "buildTreeStructure : "; 
 	//timer_tic();
 	
-	std::cout << " treeDepth : " << treeDepth << std::endl;
+	//buildTreeStructure(treeDepth,R);
 	
-	buildTreeStructure(treeDepth,R);
+	buildFullTreeStructure(treeDepth,R);
 	//timer_toc();
 	
 	R = m_R;
-	//std::cout << "R : " << m_R;
 	
-	//std::cout << "init closest patches";
-	//timer_tic();
 	storeNodeLevel(&m_treeStructure1,0,m_levelNodes1);
 	storeNodeLevel(&m_treeStructure2,0,m_levelNodes2);
-	computeClosest(&m_treeStructure1,20,m_levelNodes1,m_distanceMatrices1);
-	computeClosest(&m_treeStructure1,20,m_levelNodes2,m_distanceMatrices2);
-	initClosest(m_levelNodes1,m_distanceMatrices1,20);
-	initClosest(m_levelNodes2,m_distanceMatrices2,20);
-	//timer_toc();
 	
-	//std::cout << "convergence loop";
-	//timer_tic();
+	//computeClosest(&m_treeStructure1,10,m_levelNodes1,m_distanceMatrices1);
+	//computeClosest(&m_treeStructure1,10,m_levelNodes2,m_distanceMatrices2);
 	
-	double delta = 0.0;
+	std::cout << "computeClosestGeo" << std::endl;
+	timer_tic();
+	computeClosestGeo(&m_treeStructure1,5,m_levelNodes1,m_distanceMatrices1,m_g1);
+	computeClosestGeo(&m_treeStructure2,5,m_levelNodes2,m_distanceMatrices2,m_g2);
+	timer_toc();
+	std::cout << "end computeClosestGeo" << std::endl;
+	
+	initClosest(m_levelNodes1,m_distanceMatrices1,5);
+	initClosest(m_levelNodes2,m_distanceMatrices2,5);
+	
 	while(!convergenceCriterion && !m_stop_for_debug)
 	{
 		// swap meshes at each iteration
-		
 		order = !order; 
 		
 		PolyhedronPtr ma;
@@ -1058,21 +1677,17 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 			if(order)
 			{
 				treeStructure = &m_treeStructure1;
-				//iter++;
 			}
 			else
 			{
 				treeStructure = &m_treeStructure2;
-				//iter++;
 			}
 			iter++;
-			
-			//std::cout << iter << " " << order << " " << itermax << std::endl;
 			
 			// Compute a transformation for each point
 			unsigned int nbP = 0;
 			std::vector <pointTransformation> transf;
-			//#pragma omp parallel for private(it,nbP,m_Phi) default(none) shared(transf)
+			
 			for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && !m_stop_for_debug;++it)
 			{
 				Vertex_handle pVertex = *it;
@@ -1089,28 +1704,15 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 			
 			// Apply the transformation for each point, but scale it (iter/itermax)
 			int i=0;
-			//#pragma omp parallel for private(i,it) default(none) shared(transf)
-			int sizeS = treeStructure->m_vertices.size();
+
 			for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && (i<nbP) ;++it)
-			//for(i=0;i<sizeS;++i)
 			{
 				Vertex_handle pVertex = *it;
 				applyTransformation(pVertex,transf[i],iter,itermax);
 				i++;
 			}
 		}
-		//if(m_stop_for_debug)
-		//{
-		//	break;
-		//}
 	}
-	//timer_toc();
-	//std::cout << "fixBorder";
-	//timer_tic();
-	//fixBorder();
-	//for(unsigned s=0;s<4;++s){gaussianSmooth();}
- 	timer_toc();	
-	//std::cout << "#of iterations : " << iter << "/" << itermax << std::endl;
 }
 																																
 void softICPController::applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, int itermax)
@@ -1119,9 +1721,9 @@ void softICPController::applyTransformation(Vertex_handle p, pointTransformation
 	
 	ti.T = li*ti.T;
 	ti.Q.setAxisAngle(ti.Q.axis(),li*ti.Q.angle());
-	
+		
 	Point3d pos = p->point();
-	qglviewer::Vec V = ti.Q * qglviewer::Vec(pos.x(),pos.y(),pos.z()) + ti.T;
+	qglviewer::Vec V = ti.Q*qglviewer::Vec(pos.x(),pos.y(),pos.z()) + ti.T;
 	p->point() = CGAL::ORIGIN + Vector(V[0],V[1],V[2]);
 }
 
@@ -1131,21 +1733,20 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 	
 	if(distToLoop==0.0)
 	{
-		Halfedge_around_vertex_circulator hC = p->vertex_begin();
-		do
-		{
-			distToLoop = m_distToLoop[hC->opposite()->vertex()];
-		}
-		while(++hC!=p->vertex_begin() && distToLoop==0.0);
+		distToLoop = 0.01;
 	}
 	
-	//distToLoop = std::min(distToLoop,R-distToLoop);
 	// compute the size of the local neighborhood
 	double radius = 0.0;
 	if(distToLoop != 0.0)
 	{
-		double expo = (1*elasticity)/(distToLoop);
+		double expo = (iter*elasticity)/(distToLoop);
 		radius = R * exp(-expo*expo);
+	}
+	
+	if(!m_isSnappingRegion[p]) // if the vertex is outside the snapping region, add distance to the snapping region
+	{
+		radius += m_distToSnap[p];
 	}
 	
 	deformationNode * node;
@@ -1161,8 +1762,6 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 		node = node->m_childrenNodes[clust];
 	}
 	
-	//std::cout << iter << " " << radius << std::endl;
-	
 	std::vector<Vertex_handle> N;
  	containsP = node; // leaf node
 	
@@ -1174,14 +1773,13 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 		{
 			for(auto it = node->m_vertices.begin();it!=node->m_vertices.end();++it)
 				{
-					N.push_back(*it);
+					if(m_isSnappingRegion[*it])
+					{N.push_back(*it);}
 				}
 			getout = true;
 			break;
 		}
 		double maxDist = node->m_distClosest.back(); // the m furthest distance
-		
-		
 		
 		if( radius <= maxDist ) // collect all the patches whose distance is smaller than radius
 		{
@@ -1193,24 +1791,29 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 					//std::cout << patch->m_vertices.size() << " " << patch->m_clusterID << std::endl;
 					for(auto it = patch->m_vertices.begin();it!=patch->m_vertices.end();++it)
 					{
-						N.push_back(*it);
+						if(m_isSnappingRegion[*it])
+						{
+							N.push_back(*it);
+						}
 					}
 				}
 			}
 			
 			getout = true;
 		}
-
 		
-		//else // go up one level in the hierarchy and repeat the process
-		if ((radius >maxDist || N.size() < 4) )
+		// go up one level in the hierarchy and repeat the process
+		if ((radius >maxDist || N.size() < 5) )
 		{
 			N.clear();
 			if(node->m_clusterID == -1 ) // can't go up one level
 			{
 				for(auto it = node->m_vertices.begin();it!=node->m_vertices.end();++it)
 				{
-					N.push_back(*it);
+					if(m_isSnappingRegion[*it])
+					{
+						N.push_back(*it);
+					}
 				}
 				getout = true;
 			}
@@ -1222,9 +1825,7 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 		}
 	}
 	
-	std::cout << iter << " " << order << " " << distToLoop << " " <<  N.size () << " " << radius << std::endl;
-	
-	//if( radius == 0){std::cout << "final_radius = 0 " << N.size() << std::endl;}
+	//std::cout << iter << " " << order << " " << distToLoop << " " <<  N.size () << " " << radius << std::endl;
 	
 	return N;
 }
@@ -1436,28 +2037,20 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	double mum0 = 0.0, mum1 = 0.0, mum2 = 0.0;
 	double mut0 = 0.0, mut1 = 0.0, mut2 = 0.0;
 	
-	auto itt=phiN.begin();
 	int i=0;
 	int sizeN = N.size();
 	
-	//#pragma omp parallel for private(i,itt) default(none) shared(p_m,p_t,N,phiN)
-	//for(auto it=N.begin();it!=N.end();++it)
-	
-	//std::cout << omp_get_num_threads() << std::endl;
-	
-	//#pragma omp parallel for private(i) default(none) shared(p_m,p_t,N,phiN,sizeN) reduction(+:mum0,mum1,mum2, mut0,mut1,mut2)
 	for(i=0;i<sizeN;++i)
 	{	
-		Point3d np = N[i]->point();
-		p_t.val[i][0] = np.x(); mut0 +=p_t.val[i][0];
-		p_t.val[i][1] = np.y(); mut1 +=p_t.val[i][1];
-		p_t.val[i][2] = np.z(); mut2 +=p_t.val[i][2];
-		
-		// get nearest point
-		Point3d npp = phiN[i]->point();
+		Point3d npp =  N[i]->point();
 		p_m.val[i][0] = npp.x(); mum0 += p_m.val[i][0];
 		p_m.val[i][1] = npp.y(); mum1 += p_m.val[i][1];
 		p_m.val[i][2] = npp.z(); mum2 += p_m.val[i][2];
+		
+		Point3d np = phiN[i]->point();
+		p_t.val[i][0] = np.x(); mut0 +=p_t.val[i][0];
+		p_t.val[i][1] = np.y(); mut1 +=p_t.val[i][1];
+		p_t.val[i][2] = np.z(); mut2 +=p_t.val[i][2];
 	}
 	
 	mu_m.val[0][0] = mum0;
@@ -1471,31 +2064,12 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	mu_m = mu_m/(double)N.size();
 	mu_t = mu_t/(double)N.size();
 	
-	/*double r_m = std::numeric_limits<double>::max();
-	double r_t = std::numeric_limits<double>::max();
-	
-	for(i=0;i<sizeN;i++)
-	{
-		double dist_m = (p_m.val[i][0] - mu_m.val[0][0]) * (p_m.val[i][0] - mu_m.val[0][0]);
-		dist_m += (p_m.val[i][1] - mu_m.val[0][1]) * (p_m.val[i][1] - mu_m.val[0][1]);
-		dist_m += (p_m.val[i][2] - mu_m.val[0][2]) * (p_m.val[i][2] - mu_m.val[0][2]);
-		
-		double dist_t = (p_t.val[i][0] - mu_t.val[0][0]) * (p_t.val[i][0] - mu_t.val[0][0]);
-		dist_t += (p_t.val[i][1] - mu_t.val[0][1]) * (p_t.val[i][1] - mu_t.val[0][1]);
-		dist_t += (p_t.val[i][2] - mu_t.val[0][2]) * (p_t.val[i][2] - mu_t.val[0][2]);
-		
-		if( dist_m < r_m ) { r_m = dist_m; }
-		if( dist_t < r_t ) { r_t = dist_t; }
-	}
-	
- 	double scale = r_m / r_t;*/
-	
-	
 	Matrix q_m = p_m - Matrix::ones(N.size(),1)*mu_m;
 	Matrix q_t = p_t - Matrix::ones(N.size(),1)*mu_t;
-
+	
 	// compute rotation matrix R and translation vector t
-	Matrix H = ~q_t*q_m;
+	//Matrix H = ~q_t*q_m;
+	Matrix H = ~q_m*q_t;
 	Matrix U,W,V;
 	H.svd(U,W,V);
 	Matrix R = V*~U;
@@ -1507,8 +2081,26 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 		R = V*B*~U;
 	}
 	
-	Matrix t = ~mu_m -R*~mu_t;//*scale;
+	// rotated cloud
+	//Matrix Rm_ = R * ~q_m;
 	
+	//Matrix t = ~mu_m -R*~mu_t;
+	Matrix t = ~mu_t - R*~mu_m;
+	
+	/*double scale;
+	double sum_m=0.0, sum_t=0.0;
+	for(unsigned i=0; i<sizeN; ++i)
+	{
+		sum_m += q_m.val[i][0] * q_m.val[i][0];
+		sum_m += q_m.val[i][1] * q_m.val[i][1];
+		sum_m += q_m.val[i][2] * q_m.val[i][2];
+		
+		sum_t += q_t.val[i][0] * Rm_.val[0][i];
+		sum_t += q_t.val[i][1] * Rm_.val[1][i];
+		sum_t += q_t.val[i][2] * Rm_.val[2][i];
+	}
+	scale = sum_t / sum_m;
+	Matrix sR = R*scale;*/
 	double rData[3][3];
 	for(unsigned i=0;i<3;++i)
 	{
@@ -1519,7 +2111,7 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	}
 	pi.Q.setFromRotationMatrix(rData);
 	pi.T.setValue(t.val[0][0],t.val[1][0],t.val[2][0]);
-	//pi.S = scale;
+	
 	return pi;
 }
 
@@ -1853,4 +2445,39 @@ double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1, double 
 	dist += w2*acos(v1->normal()*v2->normal());
 	dist += w3*L2Dist(v1->getSemantic(),v2->getSemantic());
 	return dist;
+}
+
+void initGeodesicMesh(PolyhedronPtr p, geodesic::Mesh * g)
+{
+// 	//g = new geodesic::Mesh;
+	std::vector<double> points;
+	std::vector<int> faces;
+	
+	p->set_index_vertices();
+
+	for(Vertex_iterator pVertex = p->vertices_begin();
+		pVertex != p->vertices_end();
+		++pVertex)
+	{
+		points.push_back(pVertex->point().x()); // add the vertex to the list of vertices
+		points.push_back(pVertex->point().y());
+		points.push_back(pVertex->point().z());
+	}
+
+	for( Facet_iterator pFacet = p->facets_begin();
+		pFacet!=p->facets_end();
+		++pFacet)
+	{
+		// Use halfedge to visit vertices around the face
+		Halfedge_around_facet_circulator  pHalfedge = pFacet->facet_begin();
+		do
+		{
+			faces.push_back(pHalfedge->vertex()->tag());
+		}
+		while(++pHalfedge != pFacet->facet_begin());
+	}
+	
+	// initialize geodesic graph and algorithm
+        g->initialize_mesh_data(points,faces);
+	std::cout << "initialized geodesic mesh" << std::endl;
 }

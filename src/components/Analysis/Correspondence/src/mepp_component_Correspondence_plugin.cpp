@@ -1065,7 +1065,7 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 					
 					std::list<Triangle> triangles;
 					for(auto pFacet = segMesh->facets_begin(); pFacet != segMesh->facets_end(); pFacet++) triangles.push_back(Triangle(pFacet));
-					AABB_Tree tree(triangles.begin(),triangles.end());
+					AABB_Tree tree(triangles.begin(),triangles.end()); 
 					std::list<AABB_Tree::Primitive_id> primitives;
 					
 					for(auto pFacets = goodMesh->facets_begin();

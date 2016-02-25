@@ -10,8 +10,9 @@
 
 #include "CGAL/Linear_algebraCd.h"
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+#include "../components/Analysis/Correspondence/src/geodesic/geodesic_algorithm_dijkstra_alternative.h"
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
 typedef std::vector<double> semanticDescr;
 typedef CGAL::Linear_algebraCd<double>::Matrix myMatrix;
 typedef CGAL::Linear_algebraCd<double>::Vector myVector;
@@ -52,6 +53,7 @@ public:
 	qglviewer::Quaternion Q;
 	qglviewer::Vec T;
 	double S;
+	qglviewer::Vec mu_t;
 };
 
 class softICPController
@@ -62,6 +64,8 @@ public:
 	softICPController(PolyhedronPtr poly1, PolyhedronPtr poly2);
 	
 	void buildTreeStructure(const int sizeOfTree, double R=0.1, double squared_euclidean_radius=0.05);
+	
+	void buildFullTreeStructure(const int sizeOfTree, double factor);
 
 	void snapRegions(double R, double elasticity, int itermax=5, int treeDepth=2);
 	
@@ -73,11 +77,17 @@ public:
 	
 private:
 	
+	geodesic::Mesh m_g1;
+	geodesic::Mesh m_g2;
+	
+	
 	double m_R;
 	
 	std::map< std::pair<Vertex_handle,Vertex_handle>, double> m_distanceMemo;
 	
 	std::map< Vertex_handle, bool > m_isSnappingRegion;
+	
+	std::map< Vertex_handle, bool > m_isFactoredRegion;
 	
 	bool m_stop_for_debug;
 	
@@ -88,7 +98,11 @@ private:
 	std::vector < Matrix * > m_distanceMatrices2;	
 	
 	std::map<Vertex_handle,Vertex_handle> m_Phi; // the snapping Region correspondence
-	std::map<Vertex_handle,double> m_distToLoop;
+	std::map<Vertex_handle,double> m_distToLoop; // distance to the mesh's b-loop
+	std::map<Vertex_handle,double> m_distToSnap; // distance to the snapping region (inner loop)
+		
+	std::vector<Vertex_handle> m_sr1;
+	std::vector<Vertex_handle> m_sr2;
 	
 	PolyhedronPtr m_polyhedron1;
 	PolyhedronPtr m_polyhedron2;
@@ -103,7 +117,13 @@ private:
 	
 	void getSnappingRegionAABB();
 	
-	void getSnappingRegionOld(double R, double squared_euclidean_radius);
+	void getSnappingRegion(const double factor);
+	
+	void getSnappingRegionGeo();
+	
+	void getSnappingRegionGeo(const double factor);
+	
+	void computeSnapRegionDistances();
 	
 	void computeSnappingRegionCorrespondence(bool order);
 	
@@ -133,6 +153,8 @@ private:
 	void subdivideLeaves( deformationNode * root);
 	
 	void computeClosest(  deformationNode * root, int m, std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices  );
+	
+	void computeClosestGeo(  deformationNode * root, int m, std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices, geodesic::Mesh & g);
 	
 	void storeNodeLevel( deformationNode * root, int level, std::vector< std::vector<deformationNode*> > & levelNodes);
 	
@@ -167,5 +189,6 @@ private:
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
 
+void initGeodesicMesh(PolyhedronPtr p, geodesic::Mesh * g);
 
 #endif // SOFTICPCONTROLLER_H
