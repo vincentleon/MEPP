@@ -127,8 +127,6 @@ void timer_toc() {
     timer_stack.pop();
 }
 
-
-
 softICPController::softICPController(PolyhedronPtr m1, PolyhedronPtr m2) : m_polyhedron1(m1), m_polyhedron2(m2), m_stop_for_debug(false)
 {
 
@@ -185,9 +183,10 @@ void softICPController::computeSnappingRegionCorrespondence(bool order)
 		double distMin = std::numeric_limits<double>::max();
 		Vertex_handle bestCorres;
 		for(auto c = s2->begin(); c!=s2->end(); ++c)
-		{if(
-			!m_isSnappingRegion[*c]){continue;}
+		{
+			if(!m_isSnappingRegion[*c]){continue;}
 			//double dist = computePhiDistance((*it),(*c));
+			//double dist = computePhiDistance((*it),(*c),1.0,0.0,0.0);
 			double dist = computePhiDistance((*it),(*c),1.0,0.0,0.0);
 			//double dist = computePhiDistance((*it),(*c),0.5,0.1,0.4);
 			if(dist < distMin)
@@ -280,7 +279,7 @@ void softICPController::initClosest(std::vector< std::vector<deformationNode*> >
 				levelNodes[l][i]->m_closest.push_back(order[c].first);
 				levelNodes[l][i]->m_distClosest.push_back(order[c].second);
 			}
-			//std::cout << levelNodes[l][i]->m_closest.size() << std::endl;
+				//std::cout << levelNodes[l][i]->m_closest.size() << std::endl;
 		}
 		//std::cout << std::endl;
 	}
@@ -353,8 +352,8 @@ void softICPController::buildFullTreeStructure(const int sizeOfTree, const doubl
 	
 	std::cout << "Hierarchical build : " << std::endl;
 	timer_tic();
-	hierarchicalBuild(&m_treeStructure1,sizeOfTree,0,4);
-	hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
+	//hierarchicalBuild(&m_treeStructure1,sizeOfTree,0,4);
+	//hierarchicalBuild(&m_treeStructure2,sizeOfTree,0,4);
 	timer_toc();
 	
 	// Init. root nodes properly
@@ -363,8 +362,8 @@ void softICPController::buildFullTreeStructure(const int sizeOfTree, const doubl
 	m_treeStructure1.m_clusterID = -1;
 	m_treeStructure2.m_clusterID = -1;
 	
-	//colorLastClusters(&m_treeStructure1);
-	//colorLastClusters(&m_treeStructure2);
+	/*colorLastClusters(&m_treeStructure1);
+ 	colorLastClusters(&m_treeStructure2);*/
 }
 
 
@@ -423,29 +422,42 @@ void softICPController::colorCluster(deformationNode* root)
 		std::cout << "size of leaf : " << root->m_childrenNodes.size() << std::endl;
 		return;
 	}
+	double r = rand()/(double)RAND_MAX;
+	double g = rand()/(double)RAND_MAX;
+	double b = rand()/(double)RAND_MAX;
 	for(auto h = root->m_childrenNodes[0]->m_vertices.begin(); 
 	    h != root->m_childrenNodes[0]->m_vertices.end();
 		++h)
 	{
-		(*h)->color(1,0,0);
+		
+		(*h)->color(r,g,b);
 	}
+	r = rand()/(double)RAND_MAX;
+	g = rand()/(double)RAND_MAX;
+	b = rand()/(double)RAND_MAX;
 	for(auto h = root->m_childrenNodes[1]->m_vertices.begin(); 
 	    h != root->m_childrenNodes[1]->m_vertices.end();
 		++h)
 	{
-		(*h)->color(1,1,0);
+		(*h)->color(r,g,b);
 	}
+	r = rand()/(double)RAND_MAX;
+	g = rand()/(double)RAND_MAX;
+	b = rand()/(double)RAND_MAX;
 	for(auto h = root->m_childrenNodes[2]->m_vertices.begin(); 
 	    h != root->m_childrenNodes[2]->m_vertices.end();
 		++h)
 	{
-		(*h)->color(0,0,1);
+		(*h)->color(r,g,b);
 	}
+	r = rand()/(double)RAND_MAX;
+	g = rand()/(double)RAND_MAX;
+	b = rand()/(double)RAND_MAX;
 	for(auto h = root->m_childrenNodes[3]->m_vertices.begin(); 
 	    h != root->m_childrenNodes[3]->m_vertices.end();
 		++h)
 	{
-		(*h)->color(0,1,0);
+		(*h)->color(r,g,b);
 	}
 }
 
@@ -497,7 +509,6 @@ void softICPController::getSnappingRegionAABB()
 	
 	tree1.accelerate_distance_queries();
 	tree2.accelerate_distance_queries();
-	
 	
 	const double double_max = numeric_limits<double>::max();
 	
@@ -1353,9 +1364,9 @@ void softICPController::getSnappingRegionGeo(const double factor)
 	for(int i=0; i<closestToB1.size();i++)
 	{
 		double dist = m_distToLoop[closestToB1[i]];
-		if(dist < sR) {sR = dist;}
+		if(dist > sR) {sR = dist;}
 	}
-	m_R = sqrt(sR);
+	m_R = sR;
 	
 	double factoredR = m_R;
 	if(factor>1)
@@ -1389,10 +1400,10 @@ void softICPController::getSnappingRegionGeo(const double factor)
 		++pVertex)
 	{
 		double dist = m_distToLoop[pVertex];
-		if(dist < m_R)
+		if(dist <= m_R)
 		{
 			m_treeStructure2.m_vertices.insert(pVertex);
-			m_isSnappingRegion[pVertex]=true;
+			m_isSnappingRegion[pVertex] = true;
 			m_sr2.push_back(pVertex);
 			pVertex->color(1,0,0);
 		}
@@ -1402,8 +1413,83 @@ void softICPController::getSnappingRegionGeo(const double factor)
 			m_isFactoredRegion[pVertex] = true;
 			pVertex->color(1,1,0);
 		}
-	}
+	}	
+	
+	//Divide the factored region
+	Facet_iterator B1 = m_polyhedron1->facets_begin();
+	Facet_iterator E1 = m_polyhedron1->facets_end(); --E1;
+	
+	Facet_iterator B2 = m_polyhedron2->facets_begin();
+	Facet_iterator E2 = m_polyhedron2->facets_end(); --E2;
+
+	Facet_iterator f = B1;
+	do {
+		int countER = 0;
+		auto hC = f->facet_begin();
+		do
+		{
+			if(m_isSnappingRegion[hC->vertex()] || m_isFactoredRegion[hC->vertex()]){countER++;}
+		}
+		while(++hC!=f->facet_begin());
+		if(countER == 3)
+		{
+			double distToLoop = centerDistance(f);
+			Halfedge_handle h = create_center_vertex(m_polyhedron1,f);
+			Vertex_handle p = h->vertex();
+			
+			m_treeStructure1.m_vertices.insert(p);
+			m_distToLoop[p] = distToLoop;
+			
+			if(distToLoop <= m_R)
+			{
+				m_isSnappingRegion[p] = true;
+				m_sr1.push_back(p);
+				p->color(1,0,0);
+			}
+			else if( distToLoop < factoredR )
+			{
+				m_isFactoredRegion[p] = true;
+				p->color(1,1,0);
+			}
+		}
+	} while ( f++ != E1);
+	
+	Facet_iterator g = B2;
+	do {
+		int countER = 0;
+		auto hC = g->facet_begin();
+		do
+		{
+			if(m_isSnappingRegion[hC->vertex()] || m_isFactoredRegion[hC->vertex()]){countER++;}
+		}
+		while(++hC!=g->facet_begin());
+		if(countER == 3)
+		{
+			double distToLoop = centerDistance(g);
+			Halfedge_handle h = create_center_vertex(m_polyhedron2,g);
+			Vertex_handle p = h->vertex();
+			
+			m_treeStructure2.m_vertices.insert(p);
+			m_distToLoop[p] = distToLoop;
+			
+			if(distToLoop <= m_R)
+			{
+				m_isSnappingRegion[p] = true;
+				m_sr2.push_back(p);
+				p->color(1,0,0);
+			}
+			else if( distToLoop < factoredR )
+			{
+				m_isFactoredRegion[p] = true;
+				p->color(1,1,0);
+			}
+		}
+	} while ( g++ != E2);
+	
 	computeSnapRegionDistances();
+	m_polyhedron1->compute_normals();
+	m_polyhedron2->compute_normals();
+	
 	delete alg1;
 	delete alg2;
 }
@@ -1455,8 +1541,63 @@ void softICPController::computeSnapRegionDistances()
 			m_distToSnap[pVertex] = dist;
 		}
 	}
+	
+	
+	sources1.clear();
+	for(auto pVertex = m_polyhedron1->vertices_begin(); pVertex!=m_polyhedron1->vertices_end();++pVertex)
+	{
+		if(!m_isSnappingRegion[pVertex] && m_isFactoredRegion[pVertex])
+		{
+			int index = pVertex->tag();
+			geodesic::SurfacePoint gp(&m_g1.vertices()[index]);
+			sources1.push_back(gp);
+		}
+	}
+	alg1->propagate(sources1);
+	for(unsigned v = 0; v < m_sr1.size(); ++v)
+	{
+		Vertex_handle pVertex = m_sr1[v];
+		if(m_isSnappingRegion[pVertex] || m_isFactoredRegion[pVertex])
+		{
+			double dist;
+			geodesic::SurfacePoint gp(&m_g1.vertices()[pVertex->tag()]);
+			alg1->best_source(gp,dist);
+			m_distToSnap[pVertex] = dist;
+		}
+	}
+	
+	sources2.clear();
+	for(auto pVertex = m_polyhedron2->vertices_begin(); pVertex!=m_polyhedron2->vertices_end();++pVertex)
+	{
+		if(!m_isSnappingRegion[pVertex] && m_isFactoredRegion[pVertex])
+		{
+			int index = pVertex->tag();
+			geodesic::SurfacePoint gp(&m_g2.vertices()[index]);
+			sources2.push_back(gp);
+		}
+	}
+	alg2->propagate(sources2);
+	for(unsigned v = 0; v < m_sr2.size(); ++v)
+	{
+		Vertex_handle pVertex = m_sr2[v];
+		if(m_isSnappingRegion[pVertex] || m_isFactoredRegion[pVertex])
+		{
+			double dist;
+			geodesic::SurfacePoint gp(&m_g2.vertices()[pVertex->tag()]);
+			alg2->best_source(gp,dist);
+			m_distToSnap[pVertex] = dist;
+		}
+	}
+	
+	
 	delete alg1;
 	delete alg2;
+	
+	
+	
+	
+	
+	
 }
 
 void softICPController::cluster(deformationNode* root)
@@ -1629,8 +1770,6 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 	bool order = false;
 	int iter = 0;
 	
-	//std::cout << "omp_get_max_threads(): " << omp_get_max_threads() << std::endl;
-	
 	// Select snapping region and create patches on surface
 	//std::cout << "buildTreeStructure : "; 
 	//timer_tic();
@@ -1642,21 +1781,24 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 	
 	R = m_R;
 	
-	storeNodeLevel(&m_treeStructure1,0,m_levelNodes1);
-	storeNodeLevel(&m_treeStructure2,0,m_levelNodes2);
-	
-	//computeClosest(&m_treeStructure1,10,m_levelNodes1,m_distanceMatrices1);
-	//computeClosest(&m_treeStructure1,10,m_levelNodes2,m_distanceMatrices2);
-	
+	//storeNodeLevel(&m_treeStructure1,0,m_levelNodes1);
+	//storeNodeLevel(&m_treeStructure2,0,m_levelNodes2);
+		
 	std::cout << "computeClosestGeo" << std::endl;
 	timer_tic();
-	computeClosestGeo(&m_treeStructure1,5,m_levelNodes1,m_distanceMatrices1,m_g1);
-	computeClosestGeo(&m_treeStructure2,5,m_levelNodes2,m_distanceMatrices2,m_g2);
+	//computeClosestGeo(&m_treeStructure1,5,m_levelNodes1,m_distanceMatrices1,m_g1);
+	//computeClosestGeo(&m_treeStructure2,5,m_levelNodes2,m_distanceMatrices2,m_g2);
 	timer_toc();
 	std::cout << "end computeClosestGeo" << std::endl;
 	
-	initClosest(m_levelNodes1,m_distanceMatrices1,5);
-	initClosest(m_levelNodes2,m_distanceMatrices2,5);
+	//initClosest(m_levelNodes1,m_distanceMatrices1,5);
+	//initClosest(m_levelNodes2,m_distanceMatrices2,5);
+
+	//colorCluster(&m_treeStructure1);
+	//colorCluster(&m_treeStructure2);
+	
+	//colorLastClusters(&m_treeStructure1);
+	//colorLastClusters(&m_treeStructure2);
 	
 	while(!convergenceCriterion && !m_stop_for_debug)
 	{
@@ -1666,7 +1808,7 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 		PolyhedronPtr ma;
 		PolyhedronPtr mb;
 		
-		convergenceCriterion = (iter == itermax);
+		convergenceCriterion = (iter == itermax-1);
 		
 		// find correspondence between the 2 snapping regions
 		computeSnappingRegionCorrespondence(order);
@@ -1690,44 +1832,104 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 			
 			for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && !m_stop_for_debug;++it)
 			{
+				
 				Vertex_handle pVertex = *it;
+				
+				//if(m_isSnappingRegion[pVertex] && iter==4){ m_stop_for_debug = true;}
+				
 				// Get neighborhood N around pVertex
-				std::vector<Vertex_handle> N = getNeighborhood(pVertex,R,iter,itermax,elasticity,order);
+				std::vector<Vertex_handle> N = getNeighborhoodNoTree(pVertex,R,iter,itermax,elasticity,order);
+				//std::vector<Vertex_handle> N = getNeighborhood(pVertex,R,iter,itermax,elasticity,order);
 				// Get corresponding neighborhood
+				
 				std::vector<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
+				
+				if(N.size() < 3) {continue;}
+				//std::cout << N.size() << " " << phiN.size() << std::endl;
+				
 				// Compute and store transformation
 				pointTransformation ti = computeTransformation(N,phiN);
 				
+				if(m_stop_for_debug)
+				{	
+					for(auto it = N.begin(); it != N.end(); ++it)
+					{
+						Vertex_handle pVertex = *it;
+						pVertex->color(1,0,1);
+						applyTransformation(pVertex,ti,1,4);
+					}
+					
+				}
+				
+				if(m_stop_for_debug){ pVertex->color(0,0,0);}
+				
 				transf.push_back(ti);
+				
 				nbP++;
 			}
 			
 			// Apply the transformation for each point, but scale it (iter/itermax)
+			//std::cout << "li : " << iter << "/" << itermax << "=" << iter/(double)itermax << std::endl;
+			
+			
 			int i=0;
-
 			for(auto it=treeStructure->m_vertices.begin(); it!=treeStructure->m_vertices.end() && (i<nbP) ;++it)
-			{
+			{	
 				Vertex_handle pVertex = *it;
 				applyTransformation(pVertex,transf[i],iter,itermax);
 				i++;
 			}
 		}
 	}
+	if(!m_stop_for_debug)
+	{
+		finalTransform(!order);
+		finalTransform(order);
+	}
+	//moveToCorrespondence(order);
 }
 																																
 void softICPController::applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, int itermax)
 {
 	double li = iter/(double)itermax;
 	
-	ti.T = li*ti.T;
-	ti.Q.setAxisAngle(ti.Q.axis(),li*ti.Q.angle());
-		
+	
+	
+	//std::cout << "translation : " << ti.T << std::endl;
+	//std::cout << "rotation : " << ti.Q.axis() << " " << ti.Q.angle() << std::endl;
+	
+	//std::cout << iter << " " << itermax << std::endl;
+	//std::cout << "li : " << li << std::endl;
+	
+	//ti.S = li*ti.S;
+	
+	Vec scaledT = li*ti.T;
+	
+	Matrix sR = ti.R;
+	double rData[3][3];
+	for(unsigned i=0;i<3;++i)
+	{
+		for(unsigned j=0;j<3;++j)
+		{
+			rData[i][j] =sR.val[i][j];
+			//if(i==j){rData[i][j]*=ti.S;}
+		}
+	}
+	Quaternion scaledQ;
+	scaledQ.setFromRotationMatrix(rData);
+	
+	scaledQ.setAxisAngle(scaledQ.axis(),li*scaledQ.angle());
+	Quaternion unitQ;
+	//scaledQ.slerp(unitQ,ti.Q,li);
+	//std::cout << "translation : " << scaledT << std::endl;
+	//std::cout << "rotation : " << scaledQ.axis() << " " << scaledQ.angle() << std::endl;
+	
 	Point3d pos = p->point();
-	qglviewer::Vec V = ti.Q*qglviewer::Vec(pos.x(),pos.y(),pos.z()) + ti.T;
+	qglviewer::Vec V = scaledQ*qglviewer::Vec(pos.x(),pos.y(),pos.z()) + scaledT;
 	p->point() = CGAL::ORIGIN + Vector(V[0],V[1],V[2]);
 }
 
-vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, double R, unsigned int iter,unsigned itermax, double elasticity, bool order)
+std::vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, double R, unsigned int iter,unsigned itermax, double elasticity, bool order)
 {
 	double distToLoop = m_distToLoop[p];
 	
@@ -1740,13 +1942,13 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 	double radius = 0.0;
 	if(distToLoop != 0.0)
 	{
-		double expo = (iter*elasticity)/(distToLoop);
+		double expo = ((iter)*elasticity)/(distToLoop*1000);
 		radius = R * exp(-expo*expo);
 	}
 	
 	if(!m_isSnappingRegion[p]) // if the vertex is outside the snapping region, add distance to the snapping region
 	{
-		radius += m_distToSnap[p];
+		radius += (m_distToSnap[p]);
 	}
 	
 	deformationNode * node;
@@ -1803,7 +2005,7 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 		}
 		
 		// go up one level in the hierarchy and repeat the process
-		if ((radius >maxDist || N.size() < 5) )
+		if ((radius >maxDist || N.size() < 4) )
 		{
 			N.clear();
 			if(node->m_clusterID == -1 ) // can't go up one level
@@ -1830,7 +2032,104 @@ vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p, doub
 	return N;
 }
 
-vector< Vertex_handle > softICPController::getNeighborhoodOld(Vertex_handle p, double R, unsigned int iter,unsigned itermax, double elasticity, bool order)
+std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_handle p, double R, unsigned int iter,unsigned itermax, double elasticity, bool order)
+{
+	double distToLoop = m_distToLoop[p];
+	//double distToLoop = m_distToSnap[p];
+	if(distToLoop==0.0)
+	{
+		distToLoop = 0.01;
+	}
+	
+	// compute the size of the local neighborhood
+	double radius = 0.0;
+	if(distToLoop != 0.0)
+	{
+		double expo = ((iter)*elasticity)/(distToLoop*1000);
+		radius = R * exp(-expo*expo);
+	}
+	
+	if(!m_isSnappingRegion[p]) // if the vertex is outside the snapping region, add distance to the snapping region
+	{
+		radius += (m_distToSnap[p]);
+	}
+	
+	// find the geodesic neighborhood of size 'radius'
+	std::vector<Vertex_handle> N;
+	std::set<Vertex_handle> vertices;
+	Point3d O = p->point();
+	std::stack<Vertex_handle> S;
+	
+	S.push(p);
+	vertices.insert(p);
+	while(!S.empty())
+	{
+		Vertex_handle v = S.top();
+		S.pop();
+		Point3d P =v->point();
+		
+		Halfedge_around_vertex_circulator h = v->vertex_begin();
+		Halfedge_around_vertex_circulator pHalfedgeStart = h;
+		CGAL_For_all(h,pHalfedgeStart)
+		{
+			Point3d p1 = h->vertex()->point();
+			Point3d p2 = h->opposite()->vertex()->point();
+			Vector V = (p2-p1);
+			if( v == p || V * (P - O) > 0.0)
+			{
+				bool isect = sphere_clip_vector(O,radius, P, V);
+				if(!isect)
+				{
+					Vertex_handle w = h->opposite()->vertex();
+					if(vertices.find(w) == vertices.end())
+					{
+						
+						vertices.insert(w);
+						S.push(w);
+					}
+				}
+			}
+		}
+	}
+	
+	for(auto v = vertices.begin(); v!=vertices.end(); ++v)
+	{
+		if(m_isSnappingRegion[*v])
+		{
+			N.push_back(*v);
+		}
+	}
+	
+	std::cout << iter << " " << itermax << " " << radius << " " << distToLoop << " " << N.size() <<std::endl;
+	
+	return N;
+}
+
+void softICPController::moveToCorrespondence(bool order)
+{
+	std::vector<Vertex_handle> * s;
+	PolyhedronPtr m;
+	if(order)
+	{
+		s = &m_sr1;
+		m = m_polyhedron1;
+	}
+	else // reverse order between meshes
+	{
+		s = &m_sr2;
+		m = m_polyhedron2;
+	}
+	
+	computeSnappingRegionCorrespondence(order);
+	
+	for(auto v = s->begin(); v!= s->end(); ++v)
+	{
+		Point3d p = m_Phi[*v]->point();
+		(*v)->point() = p;
+	}
+}
+
+std::vector< Vertex_handle > softICPController::getNeighborhoodOld(Vertex_handle p, double R, unsigned int iter,unsigned itermax, double elasticity, bool order)
 {
 	double distToLoop = m_distToLoop[p];
 	
@@ -1924,9 +2223,61 @@ std::vector<Vertex_handle> softICPController::getCorrespondingNeighborhood( std:
 	std::vector<Vertex_handle> cN;
 	for(auto it = N.begin(); it!= N.end(); ++it)
 	{
+		
 		cN.push_back(m_Phi[*it]);
+		if(m_stop_for_debug)
+		{
+			(*it)->color(1,1,1);
+			m_Phi[*it]->color(0,1,0);
+		}
 	}
 	return cN;
+}
+
+void softICPController::finalTransform(bool order)
+{
+	std::vector<Vertex_handle> * s;
+	PolyhedronPtr m;
+	if(order)
+	{
+		s = &m_sr1;
+		m = m_polyhedron1;
+	}
+	else // reverse order between meshes
+	{
+		s = &m_sr2;
+		m = m_polyhedron2;
+	}
+	
+	computeSnappingRegionCorrespondence(order);
+	
+	std::vector<Vertex_handle> N;
+	
+	// Get all possible vertices (biggest support region)
+	for(auto v = s->begin(); v!=s->end();++v)
+	{
+		N.push_back(*v);
+	}
+	
+	std::vector<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
+	
+	
+	pointTransformation pT = computeTransformation(N,phiN);
+	
+	std::cout << "scale : " <<  pT.S << std::endl;
+	
+	// Apply the final rigid transformation to all points that are not in the extended region
+	for(auto pVertex=m->vertices_begin();pVertex!=m->vertices_end();++pVertex)
+	{
+		
+		if(!m_isSnappingRegion[pVertex] && !m_isFactoredRegion[pVertex])
+		{
+			pVertex->color(0,0,1);
+			applyTransformation(pVertex,pT,1,1);
+			
+		}
+	}
+	
 }
 
 void softICPController::fixBorder()
@@ -2082,12 +2433,12 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	}
 	
 	// rotated cloud
-	//Matrix Rm_ = R * ~q_m;
+	Matrix Rm_ = R * ~q_m;
 	
 	//Matrix t = ~mu_m -R*~mu_t;
 	Matrix t = ~mu_t - R*~mu_m;
 	
-	/*double scale;
+	double scale;
 	double sum_m=0.0, sum_t=0.0;
 	for(unsigned i=0; i<sizeN; ++i)
 	{
@@ -2100,7 +2451,7 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 		sum_t += q_t.val[i][2] * Rm_.val[2][i];
 	}
 	scale = sum_t / sum_m;
-	Matrix sR = R*scale;*/
+	Matrix sR = R*scale;
 	double rData[3][3];
 	for(unsigned i=0;i<3;++i)
 	{
@@ -2109,8 +2460,11 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 			rData[i][j] = R.val[i][j];
 		}
 	}
+	
+	pi.R = R;
 	pi.Q.setFromRotationMatrix(rData);
 	pi.T.setValue(t.val[0][0],t.val[1][0],t.val[2][0]);
+	pi.S = scale;
 	
 	return pi;
 }
@@ -2257,6 +2611,16 @@ PolyhedronPtr softICPController::getMeshInsideSR(PolyhedronPtr p)
 	return InMesh;
 }
 
+double softICPController::centerDistance(Facet_handle f)
+{
+	double center_dist = 0.0;
+	auto h = f->facet_begin();
+	do {
+		center_dist+=m_distToLoop[h->vertex()];
+	} while ( ++h != f->facet_begin());
+	center_dist/=3.0;
+	return center_dist;
+}
 
 PolyhedronPtr softICPController::buildSRMesh(std::set<Point3d> & border)
 {
@@ -2481,3 +2845,29 @@ void initGeodesicMesh(PolyhedronPtr p, geodesic::Mesh * g)
         g->initialize_mesh_data(points,faces);
 	std::cout << "initialized geodesic mesh" << std::endl;
 }
+
+bool sphere_clip_vector(Point3d &O, double r,const Point3d &P, Vector &V)
+    {
+        Vector W = P - O ;
+        double a = (V*V);
+        double b = 2.0 * V * W ;
+        double c = (W*W) - r*r ;
+        double delta = b*b - 4*a*c ;
+        if (delta < 0) {
+            // Should not happen, but happens sometimes (numerical precision)
+            return true ;
+        }
+        double t = (- b + ::sqrt(delta)) / (2.0 * a) ;
+        if (t < 0.0) {
+            // Should not happen, but happens sometimes (numerical precision)
+            return true ;
+        }
+        if (t >= 1.0) {
+            // Inside the sphere
+            return false ;
+        }
+
+        V=V*t;
+
+        return true ;
+    }

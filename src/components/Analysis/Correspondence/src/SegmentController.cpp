@@ -1786,7 +1786,7 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 	
 	m_icp = new softICPController(model,target);
 	//std::cout << "itermax :" << itermax << std::endl;
-	m_icp->snapRegions(regionSize,elasticity,itermax,3);	
+	m_icp->snapRegions(regionSize,elasticity,itermax,2);	
 	
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();

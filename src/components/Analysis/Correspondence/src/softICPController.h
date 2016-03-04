@@ -51,6 +51,7 @@ class pointTransformation
 {
 public:
 	qglviewer::Quaternion Q;
+	Matrix R;
 	qglviewer::Vec T;
 	double S;
 	qglviewer::Vec mu_t;
@@ -142,9 +143,14 @@ private:
 	void hierarchicalBuild(deformationNode * root, int sizeOfTree, int level,int k);
 	
 	std::vector<Vertex_handle> getNeighborhoodOld(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
+	
+	std::vector<Vertex_handle> getNeighborhoodNoTree(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
+	
 	std::vector<Vertex_handle> getNeighborhood(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
 	
 	std::vector<Vertex_handle> getCorrespondingNeighborhood( std::vector<Vertex_handle> & N);
+	
+	double centerDistance(Facet_handle f);
 	
 	double computeDelta(bool order);
 	
@@ -185,10 +191,16 @@ private:
 	void cutIntersectedFacets(PolyhedronPtr meshA, PolyhedronPtr meshB);
 	
 	PolyhedronPtr stitchAndSmooth(PolyhedronPtr outMesh, PolyhedronPtr inMesh, std::set<Point3d> & borders);
+	
+	void finalTransform(bool order);
+	
+	void moveToCorrespondence(bool order);
 };
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
 
 void initGeodesicMesh(PolyhedronPtr p, geodesic::Mesh * g);
+
+bool sphere_clip_vector(Point3d &O, double r,const Point3d &P, Vector &V);
 
 #endif // SOFTICPCONTROLLER_H

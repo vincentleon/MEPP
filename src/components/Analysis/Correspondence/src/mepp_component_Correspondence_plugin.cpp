@@ -153,10 +153,15 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
 			unsigned posE = meshIDString.find_last_of(".ply");
-			if(posE = meshIDString.size())
+			if(posE == std::string::npos)
 			{
 				posE = meshIDString.find_last_of(".off");
 			}
+			if(posE == std::string::npos)
+			{
+				posE = meshIDString.find_last_of(".obj");
+			}
+			
 			
 			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 
@@ -374,7 +379,8 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 		if(!isHidden)
 		{
 			bool isPLY = (files[i].substr(len-3)=="ply");
-			if(isPLY)
+			bool isOBJ = (files[i].substr(len-3)=="obj");
+			if(isPLY || isOBJ)
 			{
 				emit(mw->get_actionNewEmpty()->trigger());
 				
@@ -392,7 +398,9 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 						
 						std::string meshIDString = polyhedron_ptr->pName;
 						unsigned posB = meshIDString.find_last_of("/");
-						unsigned posE = meshIDString.find_last_of(".ply");
+						unsigned posE = 0;
+						if(isPLY){ posE = meshIDString.find_last_of(".ply"); }
+						if(isOBJ){ posE = meshIDString.find_last_of(".obj"); }
 						int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 			
 						Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
@@ -1016,14 +1024,14 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 		
 		for(unsigned j=0;j<files.size();++j)
 		{
-			unsigned posE = files[j].find_last_of(".ply");
-			if(posE == files[j].size())
+			unsigned posE = files[j].find_last_of(".ply"); std::cout << posE << std::endl;
+			if(posE == std::string::npos)
 			{
+				std::cout << "file " << files[j] << " is not .ply, continue;" << std::endl;
 				continue;
 			}
-			
-			std::cout << files[j] << std::endl;
-			
+			std::cout << "file " << files[j] << std::endl;
+				
 			emit(mw->get_actionNewEmpty()->trigger()); // Create new window for each mesh
 			for(int i=0; i<lwindow.size();i++)
 			{
@@ -1032,12 +1040,12 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 				ScenePtr scene = viewerI->getScenePtr();
 				if(viewerI->getScenePtr()->get_polyhedron()->empty())
 				{
-					viewerI->getScenePtr()->add_mesh(files[j].c_str(),0,NULL,viewerI);
+					viewerI->getScenePtr()->add_mesh(files[j].c_str(),1,NULL,viewerI);
 					PolyhedronPtr segMesh = viewerI->getScenePtr()->get_polyhedron();
 					
 					if(viewerI->getScenePtr()->get_polyhedron()->empty())
 					{
-						std::cout << "couldn't open mesh" << files[j] << std::endl;
+						//std::cout << "couldn't open mesh " << files[j] << std::endl;
 						break;
 					}
 					
@@ -1054,27 +1062,45 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 					std::stringstream nSF;
 					nSF<<meshName<<"/"<<meshID<<".obj";
 					scene->add_mesh(nSF.str().c_str(),1,NULL,viewerI);
-					PolyhedronPtr goodMesh = scene->get_polyhedron(1);
+					
+					//std::cout << "\t"<<files[j]<<" & "<< nSF.str() << std::endl;
+					
+					PolyhedronPtr goodMesh = scene->get_polyhedron();
+					
+					goodMesh->set_index_vertices();
+					segMesh->set_index_vertices();
+					
+					std::cout << segMesh->pName << " & " << goodMesh->pName << std::endl;
+					
 					
 					// Compute facet correspondence
 					std::vector<int> faceLabels;
 					std::vector<int> faceCC;
-					std::vector<Facet_handle> closest;//(goodMesh->size_of_facets(),-1);
+					std::vector<Facet_handle> closest;
 					int pc = 0;
 					Analysis::Shape & shape = comp_ptr->getShape();
 					
 					std::list<Triangle> triangles;
-					for(auto pFacet = segMesh->facets_begin(); pFacet != segMesh->facets_end(); pFacet++) triangles.push_back(Triangle(pFacet));
+					int u = 0;
+					for(auto pFacet = segMesh->facets_begin(); pFacet != segMesh->facets_end(); pFacet++)
+					{
+						triangles.push_back(Triangle(pFacet));
+						pFacet->tag() = u;
+						u++;
+					}
 					AABB_Tree tree(triangles.begin(),triangles.end()); 
 					std::list<AABB_Tree::Primitive_id> primitives;
 					
+					int v = 0;
 					for(auto pFacets = goodMesh->facets_begin();
 					pFacets!=goodMesh->facets_end();++pFacets)
 					{
-						
-						tree.all_intersected_primitives(Triangle(pFacets),std::back_inserter(primitives));
-						Facet_handle inter = primitives.back()->facet();
-						
+						pFacets->tag() = v;
+						v++;
+						//tree.all_intersected_primitives(Triangle(pFacets),std::back_inserter(primitives));
+						Facet_handle inter = tree.closest_point_and_primitive(pFacets->facet_begin()->vertex()->point()).second->facet();
+						//Facet_handle inter = primitives.back()->facet();
+						primitives.clear();
 						closest.push_back(inter);
 						pc++;
 					}
@@ -1102,10 +1128,12 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 						faceCC.push_back(shape.m_faceSegments[closest[c]->tag()]);
 					}
 					
+					std::cout << "writing files ... in " << meshName << std::endl;
+					
 					// Now print the resulting labels and segmentID in files
 					std::ofstream fileL;
 					std::stringstream ssL;
-					ssL<<meshDir<<"/"<<shape.m_meshID<<".labelsN";
+					ssL<<meshName<<"/"<<shape.m_meshID<<".labelsN";
 					fileL.open(ssL.str().c_str());
 					for(unsigned c=0;c<faceLabels.size();++c)
 					{
@@ -1116,14 +1144,15 @@ void mepp_component_Correspondence_plugin::OnCleanData()
 					
 					std::ofstream fileCC;
 					std::stringstream ssCC;
-					ssCC<<meshDir<<"/"<<shape.m_meshID<<".partsN";
+					ssCC<<meshName<<"/"<<shape.m_meshID<<".partsN";
 					fileCC.open(ssCC.str().c_str());
 					for(unsigned c=0;c<faceCC.size();++c)
 					{
 						
 						fileCC<<faceCC[c]<<"\n";
 					}
-					fileCC.close();
+					fileCC.close();	
+					break;
 				}
 				
 			}
