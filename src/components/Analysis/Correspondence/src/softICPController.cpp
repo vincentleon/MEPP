@@ -1,4 +1,5 @@
 #include "softICPController.h"
+#include <Tools/Tools_Polyhedron.h>
 #include <CGAL/Kernel/interface_macros.h>
 #include <CGAL/Sphere_3.h>
 #include "time.h"
@@ -24,6 +25,8 @@
 
 #include <CGAL/Polygon_mesh_processing/stitch_borders.h>
 #include <CGAL/Polygon_mesh_processing/triangulate_hole.h>
+
+#include <CGAL/bounding_box.h>
 
 
 typedef CGAL::Simple_cartesian<double> AABB_Kernel;
@@ -365,7 +368,6 @@ void softICPController::buildFullTreeStructure(const int sizeOfTree, const doubl
 	/*colorLastClusters(&m_treeStructure1);
  	colorLastClusters(&m_treeStructure2);*/
 }
-
 
 void softICPController::colorLastClusters(deformationNode* root)
 {
@@ -1901,7 +1903,7 @@ void softICPController::applyTransformation(Vertex_handle p, pointTransformation
 	//std::cout << iter << " " << itermax << std::endl;
 	//std::cout << "li : " << li << std::endl;
 	
-	//ti.S = li*ti.S;
+	ti.S = li*ti.S;
 	
 	Vec scaledT = li*ti.T;
 	
@@ -1912,7 +1914,7 @@ void softICPController::applyTransformation(Vertex_handle p, pointTransformation
 		for(unsigned j=0;j<3;++j)
 		{
 			rData[i][j] =sR.val[i][j];
-			//if(i==j){rData[i][j]*=ti.S;}
+			if(i==j){rData[i][j]*=ti.S;}
 		}
 	}
 	Quaternion scaledQ;
@@ -2036,22 +2038,33 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 {
 	double distToLoop = m_distToLoop[p];
 	//double distToLoop = m_distToSnap[p];
+	
+	double radius = 0.0;
 	if(distToLoop==0.0)
 	{
+		p->color(1,1,0);
 		distToLoop = 0.01;
 	}
 	
 	// compute the size of the local neighborhood
-	double radius = 0.0;
+	
 	if(distToLoop != 0.0)
 	{
-		double expo = ((iter)*elasticity)/(distToLoop*1000);
+		double expo = ((iter)*elasticity)/(distToLoop);
 		radius = R * exp(-expo*expo);
 	}
 	
+	radius += 0.3 + radius; if(radius > R) {radius = R;}
+	
+	double ratio = radius / R;
+	
+	p->color(ratio,0,0);
+	
 	if(!m_isSnappingRegion[p]) // if the vertex is outside the snapping region, add distance to the snapping region
 	{
-		radius += (m_distToSnap[p]);
+		p->color(ratio,ratio,0);	
+		radius += (m_distToLoop[p]);
+		//radius += m_distToSnap[p];
 	}
 	
 	// find the geodesic neighborhood of size 'radius'
@@ -2100,8 +2113,19 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 		}
 	}
 	
-	std::cout << iter << " " << itermax << " " << radius << " " << distToLoop << " " << N.size() <<std::endl;
-	
+	if(N.size() == 0){
+		std::cout <<"iter:" << iter << " itermax:" << itermax << " radius:" << radius  << " distToLoop:" << distToLoop << " N.size():" << N.size() 
+		<<" distToSnap:"<< m_distToSnap[p];
+		
+		if(m_isSnappingRegion[p]){
+			std::cout << "is SnappingRegion";
+		}
+		else
+		{
+				std::cout << "NOT SR";
+		}
+		std::cout << std::endl;
+	}
 	return N;
 }
 
@@ -2127,95 +2151,6 @@ void softICPController::moveToCorrespondence(bool order)
 		Point3d p = m_Phi[*v]->point();
 		(*v)->point() = p;
 	}
-}
-
-std::vector< Vertex_handle > softICPController::getNeighborhoodOld(Vertex_handle p, double R, unsigned int iter,unsigned itermax, double elasticity, bool order)
-{
-	double distToLoop = m_distToLoop[p];
-	
-	// compute the size of the local neighborhood
-	double radius = 0.0;
-	//distToLoop = std::min(distToLoop,R-distToLoop);
-	if(distToLoop != 0.0)
-	{
-		double expo = iter*elasticity/(distToLoop);
-		radius = R * exp(-expo*expo);
-		//std::cout << distToLoop << " " << expo << " " << expo*expo << " " << radius << std::endl;
-	}
-	
-	deformationNode * node;
-	deformationNode * containsP;
-	if(order) {node = &m_treeStructure1;}
-	else{node = &m_treeStructure2;}
-	
-	int nbClust = node->m_childrenNodes.size();
-	
-	while(node->m_childrenNodes.size()!=0)
-	{
-		int clust = node->m_cluster[p];
-		node = node->m_childrenNodes[clust];
-	}
-	
-	std::vector<Vertex_handle> N;
- 	containsP = node; // leaf node
-	node = node->m_parent; // parent node, to access matrix
-	
-	bool getout = false;
-	
-	while(!getout)
-	{
-		// compute the maximum distance to containsP
-		double maxDist = 0.0;
-		for(unsigned k=0;k<nbClust;++k)
-		{
-			//double dist = node->m_distanceMatrix[k][containsP->m_clusterID];
-			Vertex_handle rep = node->m_childrenNodes[k]->m_rep;
-			double dist = computePhiDistance(p,rep,1.0,0.0,0.0);
-			
-			if(dist>maxDist)
-			{
-				maxDist = dist;
-			}
-		}
-		
-		if( radius < maxDist ) // collect all the patches whose distance is smaller than radius
-		{
-			for(unsigned k=0;k<nbClust;++k)
-			{
-				//double dist = node->m_distanceMatrix[k][containsP->m_clusterID];
-				Vertex_handle rep = node->m_childrenNodes[k]->m_rep;
-				double dist = computePhiDistance(p,rep,1.0,0.0,0.0);
-				
-				if(dist < radius)
-				{
-					for(auto it = node->m_childrenNodes[k]->m_vertices.begin();it!=node->m_childrenNodes[k]->m_vertices.end();++it)
-					{
-						N.push_back(*it);
-					}
-				}
-			}
-			
-			getout = true;
-		}
-		//else // go up one level in the hierarchy and repeat the process
-		if ((radius >=maxDist || N.size() < 3) )
-		{
-			N.clear();
-			if(node->m_clusterID == -1 )
-			{
-				for(auto it = node->m_vertices.begin();it!=node->m_vertices.end();++it)
-				{
-					N.push_back(*it);
-				}
-				getout = true;
-			}
-			else{
-				node = node->m_parent;
-				getout = false;
-			}
-		}
-	}
-	return N;
 }
 
 std::vector<Vertex_handle> softICPController::getCorrespondingNeighborhood( std::vector<Vertex_handle> & N)
@@ -2261,10 +2196,7 @@ void softICPController::finalTransform(bool order)
 	
 	std::vector<Vertex_handle> phiN = getCorrespondingNeighborhood(N);
 	
-	
 	pointTransformation pT = computeTransformation(N,phiN);
-	
-	std::cout << "scale : " <<  pT.S << std::endl;
 	
 	// Apply the final rigid transformation to all points that are not in the extended region
 	for(auto pVertex=m->vertices_begin();pVertex!=m->vertices_end();++pVertex)
@@ -2273,37 +2205,10 @@ void softICPController::finalTransform(bool order)
 		if(!m_isSnappingRegion[pVertex] && !m_isFactoredRegion[pVertex])
 		{
 			pVertex->color(0,0,1);
-			applyTransformation(pVertex,pT,1,1);
-			
 		}
+		applyTransformation(pVertex,pT,1,1);
 	}
 	
-}
-
-void softICPController::fixBorder()
-{
-	this->computeSnappingRegionCorrespondence(true);
-	for(auto it = m_treeStructure1.m_vertices.begin();
-	    it!= m_treeStructure1.m_vertices.end();
-		++it)
-	    {
-		if(m_distToLoop[*it]==0.0)
-		{
-			Point3d p = m_Phi[*it]->point();
-			(*it)->point() = p;
-		}
-	    }
-	this->computeSnappingRegionCorrespondence(false);
-	for(auto it = m_treeStructure2.m_vertices.begin();
-	    it!= m_treeStructure2.m_vertices.end();
-		++it)
-	    {
-		if(m_distToLoop[*it]==0.0)
-		{
-			Point3d p = m_Phi[*it]->point();
-			(*it)->point() = p;
-		}
-	    }
 }
 
 void softICPController::gaussianSmooth()
@@ -2391,14 +2296,20 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	int i=0;
 	int sizeN = N.size();
 	
+	std::vector<Point3d> nPts;
+	std::vector<Point3d> pnPts;
+	
+	
 	for(i=0;i<sizeN;++i)
 	{	
 		Point3d npp =  N[i]->point();
+		nPts.push_back(npp);
 		p_m.val[i][0] = npp.x(); mum0 += p_m.val[i][0];
 		p_m.val[i][1] = npp.y(); mum1 += p_m.val[i][1];
 		p_m.val[i][2] = npp.z(); mum2 += p_m.val[i][2];
 		
 		Point3d np = phiN[i]->point();
+		pnPts.push_back(np);
 		p_t.val[i][0] = np.x(); mut0 +=p_t.val[i][0];
 		p_t.val[i][1] = np.y(); mut1 +=p_t.val[i][1];
 		p_t.val[i][2] = np.z(); mut2 +=p_t.val[i][2];
@@ -2460,11 +2371,21 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 			rData[i][j] = R.val[i][j];
 		}
 	}
+
+	Enriched_kernel::Iso_cuboid_3 bboxN = CGAL::bounding_box(nPts.begin(),nPts.end());
+	Enriched_kernel::Iso_cuboid_3 bboxPN = CGAL::bounding_box(pnPts.begin(),pnPts.end());
+	Vector diagN = bboxN.max() - bboxN.min();
+	Vector diagPN = bboxPN.max() - bboxPN.min();
+	
+	double scaling = sqrt(diagPN.squared_length()/diagN.squared_length());
+	
+	//Vector diagN = bboxN.max() - bboxN.min();
+	//Vector diagphiN = bboxpN.max() - bboxpN.min();
 	
 	pi.R = R;
 	pi.Q.setFromRotationMatrix(rData);
 	pi.T.setValue(t.val[0][0],t.val[1][0],t.val[2][0]);
-	pi.S = scale;
+	pi.S = scaling ;
 	
 	return pi;
 }
@@ -2854,16 +2775,21 @@ bool sphere_clip_vector(Point3d &O, double r,const Point3d &P, Vector &V)
         double c = (W*W) - r*r ;
         double delta = b*b - 4*a*c ;
         if (delta < 0) {
-            // Should not happen, but happens sometimes (numerical precision)
+            // Should not happen, but happens sometimes (numerical precision)
+
             return true ;
-        }
+        }
+
         double t = (- b + ::sqrt(delta)) / (2.0 * a) ;
         if (t < 0.0) {
-            // Should not happen, but happens sometimes (numerical precision)
+            // Should not happen, but happens sometimes (numerical precision)
+
             return true ;
-        }
+        }
+
         if (t >= 1.0) {
-            // Inside the sphere
+            // Inside the sphere
+
             return false ;
         }
 

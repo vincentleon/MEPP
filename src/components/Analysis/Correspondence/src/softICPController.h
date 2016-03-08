@@ -142,8 +142,6 @@ private:
 	
 	void hierarchicalBuild(deformationNode * root, int sizeOfTree, int level,int k);
 	
-	std::vector<Vertex_handle> getNeighborhoodOld(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
-	
 	std::vector<Vertex_handle> getNeighborhoodNoTree(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
 	
 	std::vector<Vertex_handle> getNeighborhood(Vertex_handle p, double R, unsigned iter, unsigned itermax, double elasticity, bool order);
@@ -164,8 +162,6 @@ private:
 	
 	void storeNodeLevel( deformationNode * root, int level, std::vector< std::vector<deformationNode*> > & levelNodes);
 	
-	void fixBorder();
-	
 	void gaussianSmooth();
 	
 	void initClosest(std::vector< std::vector<deformationNode*> > & levelNodes, std::vector < Matrix * > & distanceMatrices, int m);
@@ -177,18 +173,6 @@ private:
 	PolyhedronPtr buildSRMesh(std::set<Point3d> & border);
 	
 	void remeshSR(std::vector<double> & coords, std::vector<int> & tris, int vertexOffset);
-	
-	void findCouples(PolyhedronPtr meshA, PolyhedronPtr meshB);
-	
-	void floodConstruct(PolyhedronPtr meshA, PolyhedronPtr meshB);
-	
-	void rmCouple(Facet_handle A, Facet_handle B);
-	
-	void computeIntersections();
-	
-	void interTriangleTriangle(Facet_handle A, Facet_handle B);
-	
-	void cutIntersectedFacets(PolyhedronPtr meshA, PolyhedronPtr meshB);
 	
 	PolyhedronPtr stitchAndSmooth(PolyhedronPtr outMesh, PolyhedronPtr inMesh, std::set<Point3d> & borders);
 	
