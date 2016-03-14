@@ -62,7 +62,7 @@ class softICPController
 public:
 	
 	// Constructor
-	softICPController(PolyhedronPtr poly1, PolyhedronPtr poly2);
+	softICPController(PolyhedronPtr poly1, PolyhedronPtr poly2, Viewer * v);
 	
 	void buildTreeStructure(const int sizeOfTree, double R=0.1, double squared_euclidean_radius=0.05);
 	
@@ -70,11 +70,15 @@ public:
 
 	void snapRegions(double R, double elasticity, int itermax=5, int treeDepth=2);
 	
-	pointTransformation computeTransformation(std::vector<Vertex_handle> & N, std::vector<Vertex_handle> & phiN);
+	pointTransformation computeTransformation(std::vector<Vertex_handle> & N, std::vector<Vertex_handle> & phiN, Vertex_handle p, int iter, const int itermax);
+	
+	pointTransformation computeTransformationNew(std::vector<Vertex_handle> & N, std::vector<Vertex_handle> & phiN);
 
 	void applyTransformation(Vertex_handle p, pointTransformation & ti, int iter, const int itermax);
 	
 	void remesh(Viewer * v);
+	
+	std::map<Vertex_handle,Vertex_handle> m_Phi; // the snapping Region correspondence
 	
 private:
 	
@@ -98,7 +102,7 @@ private:
 	std::vector < Matrix * > m_distanceMatrices1;
 	std::vector < Matrix * > m_distanceMatrices2;	
 	
-	std::map<Vertex_handle,Vertex_handle> m_Phi; // the snapping Region correspondence
+	
 	std::map<Vertex_handle,double> m_distToLoop; // distance to the mesh's b-loop
 	std::map<Vertex_handle,double> m_distToSnap; // distance to the snapping region (inner loop)
 		
@@ -113,6 +117,10 @@ private:
 	
 	std::vector<Halfedge_handle> m_loop1;
 	std::vector<Halfedge_handle> m_loop2;
+	
+	Viewer * m_v;
+	
+	std::map<Vertex_handle,bool> is_tagged;
 	
 	double getDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
 	
@@ -176,7 +184,7 @@ private:
 	
 	PolyhedronPtr stitchAndSmooth(PolyhedronPtr outMesh, PolyhedronPtr inMesh, std::set<Point3d> & borders);
 	
-	void finalTransform(bool order);
+	void finalTransform(bool order, int iter, int itermax);
 	
 	void moveToCorrespondence(bool order);
 };

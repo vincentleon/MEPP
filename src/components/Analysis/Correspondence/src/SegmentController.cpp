@@ -1775,18 +1775,22 @@ void collectVertsAndFaces(PolyhedronPtr p, std::vector<double> & coords, std::ve
 	}
 }
 
+std::map<Vertex_handle,Vertex_handle> SegmentController::getPhi()
+{
+	return m_icp->m_Phi;
+}
+
 void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr model, double elasticity, double regionSize, int itermax)
 {
-	
-	
 	model->compute_normals();
 	target->compute_normals();
 	
 	unionSegments(v);
-	
-	m_icp = new softICPController(model,target);
+	m_icp = new softICPController(model,target,v);
 	//std::cout << "itermax :" << itermax << std::endl;
-	m_icp->snapRegions(regionSize,elasticity,itermax,2);	
+	m_icp->snapRegions(regionSize,elasticity,itermax,4);	
+	
+	//test_softICP_SVD(v);
 	
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();
@@ -1801,17 +1805,43 @@ void SegmentController::remesh(Viewer* v, PolyhedronPtr target, PolyhedronPtr mo
 }
 
 
-void test_softICP_SVD()
+void test_softICP_SVD(Viewer *v)
 {
 	// Create dummy triangle data
 	std::vector<double> coords;
 	std::vector<int> faces;
 	
-	coords.push_back(0.0); coords.push_back(0.0); coords.push_back(0.0); // P1
-	coords.push_back(2.0); coords.push_back(0.0); coords.push_back(0.0); // P2
-	coords.push_back(1.0); coords.push_back(1.5); coords.push_back(0.0); // P3
-	faces.push_back(0); faces.push_back(1); faces.push_back(2);
+	srand(time(NULL));
 	
+	/*Point3d p1(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
+	Point3d p2(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
+	Point3d p3(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
+	Point3d p4(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);*/
+	
+	/*Point3d p1(0.0,0.0,0.0);
+	Point3d p2(2.0,0.0,0.0);
+	Point3d p3(1.0,1.5,0.0);
+	Point3d p4(2.0,0.5,-1.0);*/
+	
+	Point3d p1(0.382683,0.923879,1);
+	Point3d p2(0.288887,0.952332,1);
+	Point3d p3(0.469127,0.877674,1);
+	Point3d p4(0.335785,0.938105,1);
+	Point3d p5(0.382683,0.923879,0.937501);
+	Point3d p6(0.425905,0.900776,1);
+	Point3d p7(0.425905,0.900776,0.937501);
+	
+	coords.push_back(p1.x()); coords.push_back(p1.y()); coords.push_back(p1.z()); // Q1
+	coords.push_back(p2.x()); coords.push_back(p2.y()); coords.push_back(p2.z()); // Q2
+	coords.push_back(p3.x()); coords.push_back(p3.y()); coords.push_back(p3.z()); // Q3
+	coords.push_back(p4.x()); coords.push_back(p4.y()); coords.push_back(p4.z()); // Q4
+	
+	coords.push_back(p5.x()); coords.push_back(p5.y()); coords.push_back(p5.z()); // Q1
+	coords.push_back(p6.x()); coords.push_back(p6.y()); coords.push_back(p6.z()); // Q2
+	coords.push_back(p7.x()); coords.push_back(p7.y()); coords.push_back(p7.z()); // Q3
+	
+	//faces.push_back(0); faces.push_back(1); faces.push_back(2);
+	//faces.push_back(1); faces.push_back(3); faces.push_back(2);
 	
 	PolyhedronPtr model(new Polyhedron);
 	polyhedron_builder<HalfedgeDS> builder(coords,faces);
@@ -1820,18 +1850,65 @@ void test_softICP_SVD()
 	coords.clear();
 	faces.clear();
 	
-	coords.push_back(1.0); coords.push_back(2.0); coords.push_back(-0.5); // Q1
-	coords.push_back(1.0); coords.push_back(4.0); coords.push_back(-0.5); // Q2
-	coords.push_back(-0.5); coords.push_back(3.0); coords.push_back(-0.5); // Q3
+	qglviewer::Quaternion q;
+	qglviewer::Vec Axis(0.0,0.0,1.0);
+	q.setAxisAngle(Axis,3.14159/2);
+	qglviewer::Vec T(1.0,2.0,-0.5);
+	
+	Point3d pos(2.0,0.5,0.0);
+	
 
-	faces.push_back(0); faces.push_back(1); faces.push_back(2);
+	/*Point3d q1,q2,q3,q4;
 
+	qglviewer::Vec VV = q*qglviewer::Vec(p1.x(),p1.y(),p1.z())*3.6 + T;
+	q1  = CGAL::ORIGIN + Vector(VV[0],VV[1],VV[2]);
+	
+	VV = q*qglviewer::Vec(p2.x(),p2.y(),p2.z())*3.6 + T;
+	q2  = CGAL::ORIGIN + Vector(VV[0],VV[1],VV[2]);
+	
+	VV = q*qglviewer::Vec(p3.x(),p3.y(),p3.z())*3.6 + T;
+	q3  = CGAL::ORIGIN + Vector(VV[0],VV[1],VV[2]);
+	
+	VV = q*qglviewer::Vec(p4.x(),p4.y(),p4.z())*3.6 + T;
+	q4  = CGAL::ORIGIN + Vector(VV[0],VV[1],VV[2]);*/
+	
+	
+	
+	/*Point3d q1(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
+	Point3d q2(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
+	Point3d q3(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);*/
+	
+	Point3d q1(0.343213,0.732956,0.974224);
+	Point3d q2(0.28243,0.757453,0.92857);
+	Point3d q3(0.403308,0.708077,1.02013);
+	Point3d q4(0.28243,0.757453,0.92857);
+	Point3d q5(0.306924,0.749068,0.989812);
+	Point3d q6(0.343213,0.732956,0.974224);
+	Point3d q7(0.343213,0.732956,0.974224);
+	
+	//Point3d q4(rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
+	
+	coords.push_back(q1.x()); coords.push_back(q1.y()); coords.push_back(q1.z()); // Q1
+	coords.push_back(q2.x()); coords.push_back(q2.y()); coords.push_back(q2.z()); // Q2
+	coords.push_back(q3.x()); coords.push_back(q3.y()); coords.push_back(q3.z()); // Q3
+	coords.push_back(q4.x()); coords.push_back(q4.y()); coords.push_back(q4.z()); // Q4
+	coords.push_back(q5.x()); coords.push_back(q5.y()); coords.push_back(q5.z()); // Q2
+	coords.push_back(q6.x()); coords.push_back(q6.y()); coords.push_back(q6.z()); // Q3
+	coords.push_back(q7.x()); coords.push_back(q7.y()); coords.push_back(q7.z()); // Q4
+	//faces.push_back(0); faces.push_back(1); faces.push_back(2);
+	//faces.push_back(1); faces.push_back(3); faces.push_back(2);
+	
 	PolyhedronPtr target(new Polyhedron);
 	polyhedron_builder<HalfedgeDS> buildert(coords,faces);
 	target->delegate(buildert);
 	
-	softICPController softicp(model,target);
+	v->getScenePtr()->add_polyhedron(target);
+	v->getScenePtr()->add_polyhedron(model);
 	
+	softICPController softicp(model,target,v);
+	
+	
+	std::map<Vertex_handle,bool> isMatched;
 	std::map<Vertex_handle,Vertex_handle> phi;
 	auto qVertex = target->vertices_begin();
 	for(auto pVertex = model->vertices_begin(); 
@@ -1839,8 +1916,51 @@ void test_softICP_SVD()
 		++pVertex,++qVertex)
 	{
 		phi[pVertex] = qVertex;
-	}
+		/*double distMin = std::numeric_limits<double>::max();
+		Vertex_handle closest;
+		//auto qVertex = target->vertices_begin();
+		bool match = false;
+		double r = rand()/(double)RAND_MAX;
+		double g = rand()/(double)RAND_MAX;
+		double b = rand()/(double)RAND_MAX;
+		for(auto qVertex = target->vertices_begin();
+		    qVertex!=target->vertices_end();
+		++qVertex)
+		    {
+			double dist = CGAL::squared_distance(pVertex->point(),qVertex->point());
+			if(dist < distMin && !isMatched[qVertex] )
+			{
+				distMin = dist;
+				closest = qVertex;
+				match = true;
+			}
+		    }
+		isMatched[closest] = true;
+		phi[pVertex] = closest;
 		
+		distMin = std::numeric_limits<double>::max();
+		if(!match){
+			pVertex->color(0,1,0);
+			for(qVertex = target->vertices_begin();
+			    qVertex!= target->vertices_end();
+				++qVertex)
+			{
+				 double dist = CGAL::squared_distance(pVertex->point(),qVertex->point());
+				if(dist < distMin)
+				{
+					distMin = dist;
+					closest = qVertex;   
+				}
+			}
+			phi[pVertex] = closest;
+			pVertex->color(r,g,b); closest->color(r,g,b);
+		}
+		else
+		{
+			pVertex->color(r,g,b); closest->color(r,g,b);
+		}*/
+	}
+	
 		
 	std::vector<pointTransformation> transf;
 	for(auto pVertex = model->vertices_begin();
@@ -1856,9 +1976,11 @@ void test_softICP_SVD()
 			N.push_back(pVertex);
 			phiN.push_back(phi[pVertex]);
 		}
-		pointTransformation ti = softicp.computeTransformation(N,phiN);
+		pointTransformation ti = softicp.computeTransformationNew(N,phiN);
 		transf.push_back(ti);
-		std::cout<<std::endl;
+		std::cout<<"scale : " << ti.S <<std::endl;
+		std::cout<<"trans : " << ti.T << std::endl;
+		std::cout<<"rotat : " << ti.Q.angle() << " " << ti.Q.axis() << std::endl;
 	}
 	
 	int i = 0;
@@ -1876,6 +1998,7 @@ void test_softICP_SVD()
 		std::cout << std::endl;
 		i++;
 	}
+	v->recreateListsAndUpdateGL();
 	
 }
 

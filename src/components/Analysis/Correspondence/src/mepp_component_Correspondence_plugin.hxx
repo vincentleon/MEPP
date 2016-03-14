@@ -43,7 +43,7 @@ class mepp_component_Correspondence_plugin :
 #endif
 
 	public:
-		mepp_component_Correspondence_plugin() : mepp_component_plugin_interface() {}
+		mepp_component_Correspondence_plugin() : mepp_component_plugin_interface(), m_icpOk(false) {}
 		~mepp_component_Correspondence_plugin()
 		{
 			delete actionCorrespondence;
@@ -210,7 +210,7 @@ class mepp_component_Correspondence_plugin :
 		virtual void pre_draw();
 		virtual void post_draw();
 		virtual void pre_draw_all_scene() {}
-		virtual void post_draw_all_scene() {}
+		virtual void post_draw_all_scene();
 
 		virtual void OnMouseLeftDown(QMouseEvent *event);
 		virtual void OnMouseLeftUp(QMouseEvent *event);
@@ -225,11 +225,17 @@ class mepp_component_Correspondence_plugin :
 		void compareToDatasetMahalanobis(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
 		void compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
 		
+		void drawConnections(Viewer* viewer, int frame_i, int frame_j);
+		
 		void PaintStart(Viewer * view);
+		
+		int getClickedVertex(PolyhedronPtr pMesh, double x, double y, int tolerance);
+		
 		
 		QGLFramebufferObject * m_fbo;
 		std::set<int> m_paintedFacets;
 		std::vector<Facet_handle> m_facets; // Random access to faces
+		bool m_icpOk;
 		
 	public slots:
 

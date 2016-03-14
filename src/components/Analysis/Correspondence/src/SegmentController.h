@@ -108,6 +108,8 @@ public:
 	
 	void alignSegments( Viewer *v, PolyhedronPtr s, PolyhedronPtr t, int sourceFrameID, int targetFrameID);
 	
+	std::map<Vertex_handle,Vertex_handle> getPhi();
+	
 	std::vector<PolyhedronPtr> m_mainPart;
 	std::vector<PolyhedronPtr> m_parts;
 	
@@ -116,10 +118,12 @@ public:
 	
 	std::vector<std::vector<std::vector<Halfedge_handle> > > m_partsBorders;
 	
+	softICPController * m_icp;
+	
 private:
 	
 	PolyhedronPtr m_polyhedron;
-	softICPController * m_icp;
+	
 };
 
 template<class HDS>
@@ -206,6 +210,6 @@ PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p);
 
 PolyhedronPtr convertToEnrichedPolyhedron(constructPolyhedron * p);
 
-void test_softICP_SVD();
+void test_softICP_SVD(Viewer * v);
 
 #endif // SEGMENTCONTROLLER_H

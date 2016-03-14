@@ -28,6 +28,52 @@ void mepp_component_Correspondence_plugin::post_draw()
 	}
 }
 
+void mepp_component_Correspondence_plugin::post_draw_all_scene()
+{
+	if(mw->activeMdiChild() !=0)
+	{
+		Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+		PolyhedronPtr mainPoly = mainViewer->getScenePtr()->get_polyhedron(0);
+		Correspondence_ComponentPtr mainCorres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, mainPoly);
+		
+		
+		SegmentController & mainSegCtr = mainCorres->m_segCtr;
+		PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
+			
+			
+		/*if(m_icpOk)
+		{
+			glPushMatrix();
+			glDisable(GL_LIGHTING);
+			glLineWidth(2);
+			
+		
+			auto phi = mainSegCtr.getPhi();
+			
+			int id = 0;
+			for(auto pVertex = partPoly->vertices_begin(); pVertex!=partPoly->vertices_end();++pVertex)
+			{
+				unsigned char color[3];
+				color[0] = (id*732)%255;
+				color[1] = (id*3625 + 20)%255;
+				color[2] = (id*4589 + 95)%255;
+				glColor3ubv(color);
+				Vertex_handle corres = phi[pVertex];
+				if(corres == Vertex_handle()){continue;}
+				Vec pi(pVertex->point().x(), pVertex->point().y(), pVertex->point().z());
+
+				Vec pj(corres->point().x(), corres->point().y(), corres->point().z());
+				draw_link(mainViewer, 0, 1, pi, pj);
+				id++;
+			}
+			glEnable(GL_LIGHTING);
+			glPopMatrix();
+			//mainViewer->recreateListsAndUpdateGL();
+		}*/
+	}
+}
+
+
 void mepp_component_Correspondence_plugin::pre_draw()
 {
 	if (mw->activeMdiChild() != 0)
@@ -62,7 +108,7 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 {
 	if (mw->activeMdiChild() != 0)
 	{
-		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		/*Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		int x,y,h,w;
@@ -84,8 +130,8 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 				pVertex->color(1,0,0);
 			}while(++hE!=pFacet->facet_begin());
 		}
-		m_fbo->release();
-		viewer->recreateListsAndUpdateGL();
+		m_fbo->release()
+		viewer->recreateListsAndUpdateGL();*/
 	}
 }
 
@@ -772,6 +818,7 @@ void mepp_component_Correspondence_plugin::OnSaveParts()
 		corres->initParameters(4,i,directory);
 		corres->getShape().m_meshID = i;
 		corres->saveDescriptor(p,directory);
+		corres->m_segCtr.unionSegments(mainViewer);
 		p->write_off(filename.str(),true,true);
 	}
 	
@@ -867,7 +914,8 @@ void mepp_component_Correspondence_plugin::OnUnion()
 		
 		std::cout << "itermax :" << itermax << std::endl;
 		
-		mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);
+		mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);		
+		
 		mainViewer->recreateListsAndUpdateGL();
 	}
 }
@@ -1187,6 +1235,25 @@ void mepp_component_Correspondence_plugin::OnSoftICP()
 		
 		mainSegCtr.softICP(mainViewer,partPoly,mainPoly,elasticity,regionSize,itermax);
 		mainViewer->recreateListsAndUpdateGL();
+		
+		m_icpOk = true;
+		
+		std::cout << "ICP OK ! " << std::endl;
+		/*glLineWidth(2);
+		glColor3f(1., 0., 0.);
+	
+		auto phi = mainSegCtr.getPhi();
+		
+		for(auto pVertex = mainPoly->vertices_begin(); pVertex!=mainPoly->vertices_end();++pVertex)
+		{
+			Vertex_handle corres = phi[pVertex];
+			if(corres == Vertex_handle()){continue;}
+			Vec pi(pVertex->point().x(), pVertex->point().y(), pVertex->point().z());
+
+			Vec pj(corres->point().x(), corres->point().y(), corres->point().z());
+			draw_link(mainViewer, 0, 1, pi, pj);
+		}
+		mainViewer->recreateListsAndUpdateGL();*/
 	}
 }
 
@@ -1227,7 +1294,20 @@ vector< string > mepp_component_Correspondence_plugin::getFileList(std::string m
 	return files;
 }
 
-
+void mepp_component_Correspondence_plugindrawConnections(Viewer* viewer, int frame_i, int frame_j)
+{
+	PolyhedronPtr pMesh_i = viewer->getScenePtr()->get_polyhedron(frame_i);
+	PolyhedronPtr pMesh_j = viewer->getScenePtr()->get_polyhedron(frame_j);
+	
+	
+	
+	for(auto pVertex = pMesh_i->vertices_begin(); pVertex!= pMesh_i->vertices_end();++pVertex)
+	{
+		
+		
+	}
+		
+}
 
 
 #if QT_VERSION < 0x050000
