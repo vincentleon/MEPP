@@ -108,7 +108,7 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 {
 	if (mw->activeMdiChild() != 0)
 	{
-		/*Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		int x,y,h,w;
@@ -130,8 +130,8 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 				pVertex->color(1,0,0);
 			}while(++hE!=pFacet->facet_begin());
 		}
-		m_fbo->release()
-		viewer->recreateListsAndUpdateGL();*/
+		m_fbo->release();
+		viewer->recreateListsAndUpdateGL();
 	}
 }
 
@@ -1238,7 +1238,7 @@ void mepp_component_Correspondence_plugin::OnSoftICP()
 		
 		m_icpOk = true;
 		
-		std::cout << "ICP OK ! " << std::endl;
+		//std::cout << "ICP OK ! " << std::endl;
 		/*glLineWidth(2);
 		glColor3f(1., 0., 0.);
 	
@@ -1267,6 +1267,7 @@ void mepp_component_Correspondence_plugin::OnRemesh()
 	PolyhedronPtr partPoly = mainViewer->getScenePtr()->get_polyhedron(1);
 	
 	mainSegCtr.remesh(mainViewer,partPoly,mainPoly);
+	
 	mainViewer->recreateListsAndUpdateGL();
 	
 }

@@ -90,7 +90,20 @@ struct DistanceSurface {
 		
 		bool border = m_borders.count(pp) && m_borders.count(qq) && m_borders.count(rr); 
 		bool tree = m_tree.do_intersect(t);
-		return border || !tree;
+		
+		/*double d1 = sqrt(squared_distance(p,q));
+		double d2 = sqrt(squared_distance(p,r));
+		double d3 = sqrt(squared_distance(q,r));*/
+		
+		/*if(d1/d2 > 2.5 || d3/d2 > 2.5 || d3/d1 > 2.5 || d2/d1 > 2.5 || d1/d3 > 2.5 || d2/d3 > 2.5)
+		{
+			return true;
+		}*/	
+		
+		//m_tree.all_intersected_primitives(t);
+		//return border || tree;
+		//return false;
+		return border && tree;
 	}
 	
 };
@@ -101,6 +114,7 @@ typedef Reconstruction::Triangulation_3 RTriangulation_3;
 typedef Reconstruction::Outlier_range Outlier_range;
 typedef Reconstruction::Boundary_range Boundary_range;
 typedef Reconstruction::Vertex_on_boundary_range Vertex_on_boundary_range;
+typedef Reconstruction::Triangulation_data_structure_2 TDS_2;
 
 Halfedge_handle create_center_vertex( PolyhedronPtr p, Facet_iterator f) {
     Vector vec( 0.0, 0.0, 0.0);
@@ -1370,7 +1384,9 @@ void softICPController::getSnappingRegionGeo(const double factor)
 		double dist = m_distToLoop[closestToB1[i]];
 		if(dist > sR) {sR = dist;}
 	}
-	m_R = sR;
+	m_R = sR;//*1.10;
+	
+	m_R = sR*1.1;
 	
 	double factoredR = m_R;
 	if(factor>1)
@@ -1420,7 +1436,9 @@ void softICPController::getSnappingRegionGeo(const double factor)
 	}	
 	
 	//Divide the factored region
-	/*	Facet_iterator B1 = m_polyhedron1->facets_begin();
+	/*int nbSubdiv = 0;
+	while(nbSubdiv<2){
+	Facet_iterator B1 = m_polyhedron1->facets_begin();
 	Facet_iterator E1 = m_polyhedron1->facets_end(); --E1;
 	
 	Facet_iterator B2 = m_polyhedron2->facets_begin();
@@ -1488,7 +1506,9 @@ void softICPController::getSnappingRegionGeo(const double factor)
 				p->color(1,1,0);
 			}
 		}
-	} while ( g++ != E2);*/
+	} while ( g++ != E2); 
+	nbSubdiv++;
+	}*/
 	
 	computeSnapRegionDistances();
 	m_polyhedron1->compute_normals();
@@ -1596,12 +1616,6 @@ void softICPController::computeSnapRegionDistances()
 	
 	delete alg1;
 	delete alg2;
-	
-	
-	
-	
-	
-	
 }
 
 void softICPController::cluster(deformationNode* root)
@@ -1783,7 +1797,8 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 	buildFullTreeStructure(treeDepth,R);
 	//timer_toc();
 	
-	R = m_R;
+	//R = m_R*1.20;
+	R = m_R;	
 	
 	//storeNodeLevel(&m_treeStructure1,0,m_levelNodes1);
 	//storeNodeLevel(&m_treeStructure2,0,m_levelNodes2);	
@@ -1859,16 +1874,10 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 				
 				Vertex_handle pVertex = *it;
 				
-				if(iter == 2)
+				/*if(iter == 10 && m_distToLoop[pVertex] == 0.0)
 				{
-					if(m_isSnappingRegion[pVertex])
-					{
-						csr++;
-						Point3d corr = m_Phi[pVertex]->point();
-						//source << pVertex->point().x() << " " << pVertex->point().y() << " " << pVertex->point().z() << std::endl;
-						//corresp << corr.x() << " " << corr.y() << " " << corr.z() << std::endl;
-					}
-				}
+					m_stop_for_debug = true;
+				}*/
 				
 				// Get neighborhood N around pVertex
 				std::vector<Vertex_handle> N = getNeighborhoodNoTree(pVertex,R,iter,itermax,elasticity,order);
@@ -1880,20 +1889,20 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 				// Compute and store transformation
 				pointTransformation ti;
 				
-				if(m_stop_for_debug)
+				/*if(m_stop_for_debug)
 				{
 					ti.S = 1.0;
 					ti.T = Vec(0.0,0.0,0.0);
 					ti.R = Matrix::eye(3);
 					ti.Q = Quaternion();
 					
-				}
-				else {
+				}*/
+				//else 
+				//{
 				ti = computeTransformationNew(N,phiN);
-				}
+				//}
 					
 				transf.push_back(ti);
-				
 				nbP++;
 			}
 			
@@ -1905,18 +1914,16 @@ void softICPController::snapRegions(double R, double elasticity, int itermax, in
 				applyTransformation(pVertex,transf[i],iter,itermax);
 				i++;
 			}
-			if(!m_stop_for_debug)
-			{
-				finalTransform(order,iter,itermax);
-			}
-			
-			//m_v->recreateListsAndUpdateGL();
-			//SleeperThread::msleep(1000);
-			
-			
-			
+			//if(!m_stop_for_debug)
+			//{
+			finalTransform(order,iter,itermax);
+			//}
+			m_v->recreateListsAndUpdateGL();
+			SleeperThread::msleep(1000);
 		}
 	}
+	//finalTransform(order,1,1);
+	//finalTransform(!order,1,1);
 	timer_toc();
 }
 																																
@@ -1965,7 +1972,7 @@ std::vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p,
 {
 	double distToLoop = m_distToLoop[p];
 	
-	double radius = R/10.0;
+	double radius = R/20.0;
 	
 	double elasticityR = elasticity*R;
 	
@@ -1975,6 +1982,7 @@ std::vector< Vertex_handle > softICPController::getNeighborhood(Vertex_handle p,
 		double expo = ((iter/(double)itermax)*elasticityR)/(distToLoop);
 		radius += R * exp(-expo*expo);
 	}
+	
 	
 	double ratio = radius / R;
 	
@@ -2072,7 +2080,7 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 	
 	double distToLoop = m_distToLoop[p];
 	
-	double radius = R/10.0;
+	double radius = R/20.0;
 	
 	double elasticityR = elasticity*R;
 	
@@ -2085,9 +2093,14 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 	
 	if(!m_isSnappingRegion[p]) // if the vertex is outside the snapping region, add distance to the snapping region
 	{
-		radius += m_distToSnap[p];
- 		//radius += 2*m_distToSnap[p];
+		//radius += m_distToSnap[p];
+ 		radius += 2*m_distToSnap[p];
 		//radius += m_distToLoop[p];
+	}
+	else if(m_stop_for_debug)
+	{
+		std::cout << "radius : " << radius << std::endl;
+		std::cout << "R : " << R << std::endl;
 	}
 	
 	// find the geodesic neighborhood of size 'radius'
@@ -2138,13 +2151,13 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 			}
 		}
 		
-		if(N.size() == 0)
+		/*if(N.size() == 0)
 		{
 			for(auto v = vertices.begin(); v!=vertices.end(); ++v)
 			{
-				(*v)->color(0.0,1.0,1.0);
+				//(*v)->color(0.0,1.0,1.0);
 			}
-		}
+		}*/
 		
 		std::set<Point3d> corresp;
 		for(unsigned c=0;c<N.size();++c)
@@ -2163,7 +2176,7 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 			//std::cout << "nbLoop : " << nbLoop << " radius : " << radius << std::endl;
 			N.clear();
 			corresp.clear();
-			radius+=R/10.0;
+			radius+=R/20.0;
 			nbLoop++;
 		}
 		else 
@@ -2175,9 +2188,21 @@ std::vector< Vertex_handle > softICPController::getNeighborhoodNoTree(Vertex_han
 	{
 		//std::cout << "N.size() = 0  _ iter=" << nbLoop << std::endl;
 		p->color(1.0,0.0,1.0);
-		
-		m_stop_for_debug = true;
+		//m_stop_for_debug = true;
 	}
+	
+	if(m_stop_for_debug)
+	{
+		for(auto it = N.begin(); it != N.end(); ++it)
+		{
+			Vertex_handle v = (*it);
+			v->color(1.0,1.0,1.0);
+			m_Phi[v]->color(0.0,1.0,1.0);
+		}
+		std::cout << " N.size : " << N.size() << std::endl;
+		std::cout << " radius : " << radius << std::endl;	
+	}
+	
 	return N;
 }
 
@@ -2211,13 +2236,6 @@ std::vector<Vertex_handle> softICPController::getCorrespondingNeighborhood( std:
 	for(auto it = N.begin(); it!= N.end(); ++it)
 	{
 		cN.push_back(m_Phi[*it]);
-		//Vertex_handle v = m_Phi[*it];
-		
-		if(m_stop_for_debug)
-		{
-			//(*it)->color(1,1,1);
-			//m_Phi[*it]->color(0,1,0);
-		}
 	}
 	return cN;
 }
@@ -2237,7 +2255,7 @@ void softICPController::finalTransform(bool order, int iter, int itermax)
 		m = m_polyhedron2;
 	}
 	
-	computeSnappingRegionCorrespondence(order);
+	//computeSnappingRegionCorrespondence(order);
 	
 	std::vector<Vertex_handle> N;
 	
@@ -2592,13 +2610,97 @@ pointTransformation softICPController::computeTransformation(std::vector<Vertex_
 	return pi;
 }
 
+void softICPController::remeshNew(Viewer *v)
+{
+	std::vector<double> coords;
+	std::vector<int> tris;
+	
+	std::list<delaunayKernel::Point_3> L;
+	for(auto p = m_polyhedron1->vertices_begin(); p!= m_polyhedron1->vertices_end(); ++p)
+	{
+		Point3d pp = p->point();
+		L.push_front(delaunayKernel::Point_3(pp.x(),pp.y(),pp.z()));
+	}
+	for(auto p = m_polyhedron2->vertices_begin(); p!= m_polyhedron2->vertices_end(); ++p)
+	{
+		Point3d pp = p->point();
+		L.push_front(delaunayKernel::Point_3(pp.x(),pp.y(),pp.z()));
+	}
+
+	std::vector<RFacet> facets;
+	//AABB_Tree tree(outsideMesh->facets_begin(),outsideMesh->facets_end());
+	//DistanceSurface pdistSurf(tree,border);
+	
+	Perimeter perim(0.0);
+	
+	CGAL::advancing_front_surface_reconstruction(L.begin(),L.end(),std::back_inserter(facets),perim);//,1.5,0.05);
+	
+	for(auto v = L.begin(); v!=L.end();++v)
+	{
+		auto p = (*v);
+		coords.push_back(p.x());coords.push_back(p.y());coords.push_back(p.z());
+	}
+	
+	for(auto f = facets.begin(); f!=facets.end(); ++f)
+	{
+		tris.push_back((*f)[0]);tris.push_back((*f)[1]);tris.push_back((*f)[2]);
+	}
+	
+	PolyhedronPtr reconstructedMesh(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	reconstructedMesh->delegate(builder);
+	reconstructedMesh->keep_largest_connected_components(1);
+	
+	constructPolyhedron * stitchedMesh(new constructPolyhedron);
+	polyhedron_builder<constructPolyhedron::HalfedgeDS> buildercp(coords,tris);
+	stitchedMesh->delegate(buildercp);
+	
+	// stitch non-connected vertices
+	CGAL::Polygon_mesh_processing::stitch_borders(*stitchedMesh);
+	
+	// fill holes that are not part of the main mesh borders
+	std::vector<constructPolyhedron::Facet_handle>  patch_facets;
+	std::vector<constructPolyhedron::Vertex_handle> patch_vertices;
+	for(auto h = stitchedMesh->halfedges_begin(); h!=stitchedMesh->halfedges_end(); ++h)
+	{
+		auto p = h->vertex()->point();
+		Point3d pp(p.x(),p.y(),p.z());
+		if(h->is_border()){
+		CGAL::Polygon_mesh_processing::triangulate_refine_and_fair_hole(
+			*stitchedMesh,
+			h,
+			std::back_inserter(patch_facets),
+			std::back_inserter(patch_vertices),
+			CGAL::Polygon_mesh_processing::parameters::vertex_point_map(get(CGAL::vertex_point, *stitchedMesh)).
+			geom_traits(constructionK())); 
+		}
+	}
+	
+	//CGAL::Polygon_mesh_processing::stitch_borders(*stitchedMesh);
+	
+	// Return result as Enriched Polyhedron
+	PolyhedronPtr result = convertToEnrichedPolyhedron(stitchedMesh);
+	
+	
+	result->compute_normals();
+	v->getScenePtr()->add_polyhedron(result);
+	/*reconstructedMesh->compute_normals();
+	v->getScenePtr()->add_polyhedron(reconstructedMesh);*/
+	
+}
+
+
 void softICPController::remesh(Viewer * v)
 {	
 	PolyhedronPtr outMesh = getMeshOutsideSR();
-	std::cout << "after getMeshOutsideSR()" << std::endl;
+	for(auto p=outMesh->vertices_begin();p!=outMesh->vertices_end();++p)
+	{
+		p->color(1.0,0.0,0.0);
+	}
 	outMesh->normalize_border();
 	outMesh->compute_normals();
-	
+	v->getScenePtr()->add_polyhedron(outMesh);
+		
 	// collect border points for surface Reconstruction filtering
 	std::set<Point3d> border;
 	for(auto h = outMesh->border_halfedges_begin(); h!=outMesh->halfedges_end();++h)
@@ -2606,8 +2708,18 @@ void softICPController::remesh(Viewer * v)
 		border.insert(h->vertex()->point());
 	}
 	
+	PolyhedronPtr srMesh = buildSRMesh(border,outMesh);
+	for(auto p=srMesh->vertices_begin();p!=srMesh->vertices_end();++p)
+	{
+		p->color(0.0,1.0,0.0);
+	}
+	outMesh->compute_normals();
+	v->getScenePtr()->add_polyhedron(srMesh);
 	
-	PolyhedronPtr srMesh = buildSRMesh(border);
+	
+	v->getScenePtr()->setVisible(0,false);
+	v->getScenePtr()->setVisible(1,false);
+	
 	srMesh->normalize_border();
 	for(auto h = srMesh->border_halfedges_begin(); h!=srMesh->halfedges_end();++h)
 	{
@@ -2615,10 +2727,11 @@ void softICPController::remesh(Viewer * v)
 	}
 	
 	PolyhedronPtr completeMesh = stitchAndSmooth(outMesh,srMesh,border);
+	for(auto p=completeMesh->vertices_begin();p!=completeMesh->vertices_end();++p)
+	{
+		p->color(0.0,0.0,1.0);
+	}
 	completeMesh->compute_normals();
-	
-	v->getScenePtr()->add_polyhedron(outMesh);
-	v->getScenePtr()->add_polyhedron(srMesh);
 	v->getScenePtr()->add_polyhedron(completeMesh);
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 }
@@ -2636,6 +2749,7 @@ PolyhedronPtr softICPController::getMeshOutsideSR()
 			Point3d p = pVertex->point();
 			coords.push_back(p.x());coords.push_back(p.y());coords.push_back(p.z());
 	}
+	
 	
 	for(auto pFacet = p->facets_begin(); pFacet!=p->facets_end(); ++pFacet)
 	{	
@@ -2745,43 +2859,30 @@ double softICPController::centerDistance(Facet_handle f)
 	return center_dist;
 }
 
-PolyhedronPtr softICPController::buildSRMesh(std::set<Point3d> & border)
+PolyhedronPtr softICPController::buildSRMesh(std::set<Point3d> & border, PolyhedronPtr outsideMesh)
 {
 	std::vector<double> coords;
 	std::vector<int> tris;
 	PolyhedronPtr m1 = getMeshInsideSR(m_polyhedron1);
 	PolyhedronPtr m2 = getMeshInsideSR(m_polyhedron2);
-	std::list<Point> L;
+	std::list<delaunayKernel::Point_3> L;
 	for(auto p = m1->vertices_begin(); p!= m1->vertices_end(); ++p)
 	{
 		Point3d pp = p->point();
-		L.push_front(Point(pp.x(),pp.y(),pp.z()));
+		L.push_front(delaunayKernel::Point_3(pp.x(),pp.y(),pp.z()));
 	}
 	for(auto p = m2->vertices_begin(); p!= m2->vertices_end(); ++p)
 	{
 		Point3d pp = p->point();
-		L.push_front(Point(pp.x(),pp.y(),pp.z()));
+		L.push_front(delaunayKernel::Point_3(pp.x(),pp.y(),pp.z()));
 	}
 
 	std::vector<RFacet> facets;
-	AABB_Tree tree(m_polyhedron1->facets_begin(),m_polyhedron1->facets_end());
-	tree.insert(m_polyhedron2->facets_begin(),m_polyhedron2->facets_end());
-	tree.build();
+	AABB_Tree tree(outsideMesh->facets_begin(),outsideMesh->facets_end());
+	
 	
 	DistanceSurface pdistSurf(tree,border);
-	//Perimeter per(0.0);
-	
-	/*RTriangulation_3 dt(L.begin(),L.end());
-	Reconstruction reconstruction(dt, pdistSurf);
-	reconstruction.run();
-	
-	
-	std::cout << reconstruction.number_of_outliers() << std::endl;*/
-	
-	
-	
-	CGAL::advancing_front_surface_reconstruction(L.begin(),L.end(),std::back_inserter(facets),pdistSurf);//,1,0.2);
-	
+	CGAL::advancing_front_surface_reconstruction(L.begin(),L.end(),std::back_inserter(facets),pdistSurf,1.0,0.005);
 	
 	for(auto v = L.begin(); v!=L.end();++v)
 	{
@@ -2797,7 +2898,8 @@ PolyhedronPtr softICPController::buildSRMesh(std::set<Point3d> & border)
 	PolyhedronPtr reconstructedMesh(new Polyhedron);
 	polyhedron_builder<HalfedgeDS> builder(coords,tris);
 	reconstructedMesh->delegate(builder);
-	
+	reconstructedMesh->keep_largest_connected_components(1);
+	reconstructedMesh->compute_normals();
 	return reconstructedMesh;
 }
 
@@ -2813,7 +2915,7 @@ PolyhedronPtr softICPController::stitchAndSmooth(PolyhedronPtr outMesh, Polyhedr
 	std::vector<Point3d> newP;
 	std::set<Point3d> sr;
 	sr.insert(inMesh->points_begin(),inMesh->points_end());
-	
+		
 	for(auto po = outMesh->points_begin(); po != outMesh->points_end(); ++po)
 	{
 		coords.push_back(po->x());
@@ -2879,7 +2981,7 @@ PolyhedronPtr softICPController::stitchAndSmooth(PolyhedronPtr outMesh, Polyhedr
 		}
 	}
 	
-	CGAL::Polygon_mesh_processing::stitch_borders(*stitchedMesh);
+	//CGAL::Polygon_mesh_processing::stitch_borders(*stitchedMesh);
 	
 	// Return result as Enriched Polyhedron
 	PolyhedronPtr result = convertToEnrichedPolyhedron(stitchedMesh);
@@ -2888,38 +2990,45 @@ PolyhedronPtr softICPController::stitchAndSmooth(PolyhedronPtr outMesh, Polyhedr
 	result->delegate(ivr);
 	
 	// Laplacian smoothing
-	for(auto p = result->vertices_begin(); p!=result->vertices_end();++p)
+	int nbSmooth = 0;
+	while(nbSmooth < 10)
 	{
-		if(sr.count(p->point())){
-		double sx = 0.0;
-		double sy = 0.0;
-		double sz = 0.0;
-		Halfedge_around_vertex_circulator hC = p->vertex_begin();
-		do
+		for(auto p = inMesh->vertices_begin(); p!=inMesh->vertices_end();++p)
 		{
-			Point3d n = hC->opposite()->vertex()->point();
-			sx = sx + n.x();
-			sy = sy + n.y();
-			sz = sz + n.z();
+			if(sr.count(p->point()) && !borders.count(p->point())){
+			double sx = 0.0;
+			double sy = 0.0;
+			double sz = 0.0;
+			Halfedge_around_vertex_circulator hC = p->vertex_begin();
+			do
+			{
+				Point3d n = hC->opposite()->vertex()->point();
+				sx = sx + n.x();
+				sy = sy + n.y();
+				sz = sz + n.z();
+				
+				
+			}while(++hC != p->vertex_begin());
+			sx/=p->vertex_degree();
+			sy/=p->vertex_degree();
+			sz/=p->vertex_degree();
+			Point3d smoothed(sx,sy,sz);
+			newP.push_back(smoothed);
 			
-			
-		}while(++hC != p->vertex_begin());
-		sx/=p->vertex_degree();
-		sy/=p->vertex_degree();
-		sz/=p->vertex_degree();
-		Point3d smoothed(sx,sy,sz);
-		newP.push_back(smoothed);
-		
+			}
 		}
- 	}
-	int i =0;
-	for(auto p = result->vertices_begin(); p!=result->vertices_end();++p)
-	{
-		if(sr.count(p->point()))
+		int i =0;
+		for(auto p = inMesh->vertices_begin(); p!=inMesh->vertices_end();++p)
 		{
-			p->point() = newP[i];
-			i++;
+			if(sr.count(p->point()) && !borders.count(p->point()))
+			{
+				sr.erase(p->point());
+				p->point() = newP[i];
+				sr.insert(newP[i]);
+				i++;
+			}
 		}
+		nbSmooth++;
 	}
 	
 	result->compute_normals();

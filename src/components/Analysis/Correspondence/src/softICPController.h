@@ -78,6 +78,8 @@ public:
 	
 	void remesh(Viewer * v);
 	
+	void remeshNew(Viewer *v);
+	
 	std::map<Vertex_handle,Vertex_handle> m_Phi; // the snapping Region correspondence
 	
 private:
@@ -178,7 +180,7 @@ private:
 	
 	PolyhedronPtr getMeshInsideSR(PolyhedronPtr p);
 	
-	PolyhedronPtr buildSRMesh(std::set<Point3d> & border);
+	PolyhedronPtr buildSRMesh(std::set<Point3d> & border, PolyhedronPtr outsideMesh);
 	
 	void remeshSR(std::vector<double> & coords, std::vector<int> & tris, int vertexOffset);
 	

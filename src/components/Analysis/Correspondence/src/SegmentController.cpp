@@ -1798,7 +1798,7 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 
 void SegmentController::remesh(Viewer* v, PolyhedronPtr target, PolyhedronPtr model)
 {
-	m_icp->remesh(v);
+	m_icp->remeshNew(v);
 	
 	v->getScenePtr()->todoIfModeSpace(v,0.0);
 	v->recreateListsAndUpdateGL();	
