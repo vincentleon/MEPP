@@ -18,6 +18,24 @@
 
 #include "../components/Tools/Boolean_Operations/src/BoolPolyhedra.h"
 
+#include "../components/Tools/Boolean_Operations/src/Boolean_Operations_Component.h"
+
+typedef boost::shared_ptr<Boolean_Operations_Component> Boolean_Operations_ComponentPtr;
+
+
+std::stack<clock_t> timer_stack;
+
+void timer_tic() {
+  timer_stack.push(clock());
+}
+
+void timer_toc() {
+    std::cout << "Time elapsed: "
+              << ((double)(clock() - timer_stack.top())) / CLOCKS_PER_SEC
+              << std::endl;
+    timer_stack.pop();
+}
+
 void mepp_component_Correspondence_plugin::post_draw()
 {
 	if (mw->activeMdiChild() != 0) 
@@ -90,8 +108,169 @@ void mepp_component_Correspondence_plugin::OnMouseLeftDown(QMouseEvent *event)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		//std::cout << "Mouse Left Down" << std::endl;
+		
+		//std::cout << "correspondence Done : " << m_correspondenceDone << std::endl;
+		
+		if(m_correspondenceDone)
+		{
+			m_facets.clear();
+			PaintStart(viewer);
+			m_PaintingMode = false;
+			//std::cout << "Mouse Left Down Correspondence Done" << std::endl;
+			Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
+			int tagCC = 0;
+			
+			int x,y,h,w;
+			x = event->x();
+			y = event->y();
+			h = viewer->height();
+			w = viewer->width();
+			unsigned char color[3];
+			
+			m_fbo->bind();
+			glReadPixels(x,h-y,1,1,GL_RGB,GL_UNSIGNED_BYTE,color);
+			unsigned index = (color[0] << 16) | (color[1] << 8) | color[2];
+			
+			if( index != 0xFFFFFF )
+			{
+				Facet_iterator pFacet = m_facets[index];
+				Halfedge_around_facet_circulator hE = pFacet->facet_begin();
+				Vertex_handle pVertex = hE->vertex();
+				tagCC = component_ptr->m_segCtr.m_ccMap[pVertex];
+			}
+			m_fbo->release();
+			delete m_fbo;
+			viewer->recreateListsAndUpdateGL();
+			viewer->getScenePtr()->set_loadType(1);
+			component_ptr->m_segCtr.cutCC(tagCC);
+			PolyhedronPtr newPart = component_ptr->m_segCtr.m_parts.back();
+			viewer->getScenePtr()->set_loadType(1);
+			viewer->getScenePtr()->add_polyhedron(newPart);
+			viewer->getScenePtr()->todoIfModeSpace(viewer,0.0);
+			component_ptr->m_segCtr.cutComplementCC(tagCC);
+			for(unsigned ip=0;ip<component_ptr->m_segCtr.m_mainPart.size();++ip)
+			{
+				PolyhedronPtr mpart = component_ptr->m_segCtr.m_mainPart[ip];
+				viewer->getScenePtr()->add_polyhedron(mpart);
+				viewer->getScenePtr()->todoIfModeSpace(viewer,0.0);
+			}
+			
+			viewer->recreateListsAndUpdateGL();
+			
+			Viewer* mainViewer = (Viewer*)qobject_cast<QWidget *>(lwindow[0]->widget());
+			if(viewer != mainViewer && !m_selectedTarget)
+			{
+				m_selectedTarget = true;
+			}
+			else	
+			{
+				m_selectedModel = true;
+			}
+			
+			if(m_selectedTarget && m_selectedModel)
+			{
+				//std::cout << "both are selected" << std::endl;
+				PolyhedronPtr polyhedron_ptr = mainViewer->getScenePtr()->get_polyhedron();
+				Correspondence_ComponentPtr mainComponent_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer, polyhedron_ptr);
+				SegmentController & mainSegCtr = mainComponent_ptr->m_segCtr;
+	
+				mainViewer->getScenePtr()->add_polyhedron(newPart);
+				mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+				mainViewer->recreateListsAndUpdateGL();
+				
+				mainSegCtr.alignSegments(mainViewer,mainSegCtr.m_parts.back(),newPart,mainViewer->get_nb_frames()-2,mainViewer->get_nb_frames()-1);
+				//std::cout << "alignSegments ok" << std::endl;
+				
+				SettingsDialog dial;
+				double elasticity = 1/500.0;
+				double regionSize = 0.5;
+				int itermax = 5;
+				/*if (dial.exec() == QDialog::Accepted)
+				{*/
+					/*elasticity = dial.doubleSpinBox->value();
+					regionSize = dial.doubleSpinBox_2->value();
+					itermax = dial.spinBox_2->value();*/
+					elasticity = 0.001;
+					regionSize = 1.1;
+					itermax = 2;
+					mainSegCtr.softICP(mainViewer,newPart,elasticity,regionSize,itermax);	
+					std::list<PolyhedronPtr> & polys = mainSegCtr.getPolyhedronToMerge();
+					
+					std::cout << "after softICP & remesh" << std::endl;
+					
+					for(auto p = polys.begin(); p!= polys.end(); ++p)
+					{
+						mainViewer->getScenePtr()->add_polyhedron(*p);
+						//mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+					}
+					mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+					/*
+					PolyhedronPtr resultSR = polys.front();
+					polys.pop_front();
+					
+					Boolean_Operations_ComponentPtr boolOp = findOrCreateComponentForViewer<Boolean_Operations_ComponentPtr, Boolean_Operations_Component>(mainViewer, resultSR);
+					
+					PolyhedronPtr p1 = resultSR;
+					PolyhedronPtr p2 = polys.front();
+					polys.pop_front();
+					PolyhedronPtr res(new Polyhedron);
+					
+					
+					p1->compute_normals();
+					p1->compute_bounding_box();
+					p2->compute_normals();
+					p2->compute_bounding_box();
+					
+					mainViewer->getScenePtr()->add_polyhedron(p1);
+					mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+					mainViewer->getScenePtr()->add_polyhedron(p2);
+					mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);
+					
+					std::cout << "p1 size of facets : " << p1->size_of_facets() << std::endl;
+					std::cout << "p1 size of facets : " << p1->size_of_vertices() << std::endl;
+					
+					std::cout << "p2 size of facets : " << p2->size_of_facets() << std::endl;
+					std::cout << "p2 size of facets : " << p2->size_of_vertices() << std::endl;
+					
+					boolOp->Boolean_Union(p1, p2, res);
+					
+					res->compute_normals();
+					res->compute_bounding_box();
+					
+					std::cout << "res size of facets : " << res->size_of_facets() << std::endl;
+					std::cout << "res size of facets : " << res->size_of_vertices() << std::endl;
+					
+					std::cout << "first Boolean Union" << std::endl;
+					boolOp->cpt_U++;
+					while(!polys.empty())
+					{
+						std::cout << "poly not empty : " << polys.size() << std::endl;
+						p1 = res;
+						p2 = polys.front();
+					
+						PolyhedronPtr temp(new Polyhedron);
+						std::cout << "size p1 : " << p1->size_of_facets() << std::endl;
+						std::cout << "size p2 : " << p2->size_of_facets() << std::endl;
+						polys.pop_front();
+						boolOp->Boolean_Union(p1, p2, temp);
+						boolOp->cpt_U++;
+						std::cout << "polys : " << polys.size() << std::endl;
+						res = temp;
+					}
+					mainViewer->getScenePtr()->add_polyhedron(res);
+					mainViewer->getScenePtr()->todoIfModeSpace(mainViewer,0.0);*/
+				//}
+				
+				mainViewer->recreateListsAndUpdateGL();
+				m_correspondenceDone = false;
+				
+			}
+			
+		}
 		
  	}
+ 	
 }
 
 void mepp_component_Correspondence_plugin::OnMouseLeftUp(QMouseEvent *event)
@@ -100,7 +279,7 @@ void mepp_component_Correspondence_plugin::OnMouseLeftUp(QMouseEvent *event)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
-		m_hasNotBeenPainted=false;
+		//m_hasNotBeenPainted=false;
  	}
 }
 
@@ -109,6 +288,7 @@ void mepp_component_Correspondence_plugin::OnMouseMotion(QMouseEvent* event)
 	if (mw->activeMdiChild() != 0)
 	{
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
 		int x,y,h,w;
@@ -172,7 +352,6 @@ void mepp_component_Correspondence_plugin::OnPainting()
 {
 	if(mw->activeMdiChild() != 0)
 	{
-		
 		Viewer* viewer = (Viewer *)mw->activeMdiChild();
 		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
 		for(Facet_iterator pFacet = polyhedron_ptr->facets_begin();pFacet!=polyhedron_ptr->facets_end();++pFacet)
@@ -211,10 +390,10 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 			
 			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 
-			SettingsDialog dial;
-			if (dial.exec() == QDialog::Accepted)
-			{
-				nbLabel = dial.spinBox->value();
+			//SettingsDialog dial;
+			/*if (dial.exec() == QDialog::Accepted)
+			{*/
+				//nbLabel = dial.spinBox->value();
 				
 				QApplication::setOverrideCursor(Qt::WaitCursor);
 
@@ -224,31 +403,120 @@ void mepp_component_Correspondence_plugin::OnCorrespondence()
 				
 				component_ptr->initParameters(nbLabel,meshID,meshIDString.substr(0,posB));
 				
+				saveToPly("/home/leon/Desktop/kring.ply",polyhedron_ptr);
+				
 				component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));
 				
 				component_ptr->initializeEllipsoid(polyhedron_ptr);
-				
-				std::cout << "Compute Ellipse Parameters" << std::endl;
-				//timer_tic();
-				component_ptr->computeEllipseParameters(polyhedron_ptr);
-				//timer_toc();
-				
 				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+				saveToPly("/home/leon/Desktop/init.ply",polyhedron_ptr);
+				
+				
+				std::cout<< " learn Ellipse " << std::endl;
+				timer_tic();
+				component_ptr->computeEllipseParameters(polyhedron_ptr);
+				timer_toc();
+				
+				const std::vector<double> ell = component_ptr->getEllipse();
+				unsigned b=0; double v=0.0;
+				for(unsigned l=0;l<ell.size();++l)
+				{
+					if(ell[l]>v){v=ell[l];b=l;}
+				}
+				std::vector<double> largerEll = ell;
+				std::vector<double> smallerEll = ell;
+				
+				component_ptr->setEllipse(smallerEll); // set a smaller Ellipse for the query
+				
+				std::cout<< " test Ellipse " << std::endl;
+				timer_tic();
+				component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+				timer_toc();
+				
+				saveToPly("/home/leon/Desktop/final.ply",polyhedron_ptr);
+				
+				SegmentController & segCtr = component_ptr->m_segCtr;
+				segCtr.tagVerticesAfterCorrespondence();
 				
 				mw->statusBar()->showMessage(tr("Correspondence is done"));
 
 				component_ptr->set_init(2);
 				viewer->showAllScene();
 				viewer->recreateListsAndUpdateGL();
-				
-				std::cout << "Compare to dataset" << std::endl;
-				//tic();
-				compareToDataset(component_ptr,meshID);
-				//toc();
-			}
+			
+				//component_ptr->setEllipse(largerEll); // set a larger Ellipse for the segments to add
+ 				compareToDataset(component_ptr,meshID);
+			//}
 		}
+		m_correspondenceDone = true;
 	}
 	QApplication::restoreOverrideCursor();
+}
+
+void mepp_component_Correspondence_plugin::OnSVMCorrespondance()
+{
+	if(mw->activeMdiChild() != 0)
+	{
+		Viewer* viewer = (Viewer *)mw->activeMdiChild();
+		PolyhedronPtr polyhedron_ptr = viewer->getScenePtr()->get_polyhedron();
+		Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewer, polyhedron_ptr);
+		int nbLabel = 4;
+		
+		std::string meshIDString = polyhedron_ptr->pName;
+		unsigned posB = meshIDString.find_last_of("/");
+		unsigned posE = meshIDString.find_last_of(".ply");
+		if(posE == std::string::npos)
+		{
+			posE = meshIDString.find_last_of(".off");
+		}
+		if(posE == std::string::npos)
+		{
+			posE = meshIDString.find_last_of(".obj");
+		}
+		int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
+		
+		SettingsDialog dial; 
+		
+		mw->statusBar()->showMessage(tr("SVM Correspondance..."));
+		
+		component_ptr->readSelectionBasedOnColor(polyhedron_ptr);
+		
+		component_ptr->initParameters(nbLabel,meshID,meshIDString.substr(0,posB));
+		
+		component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));
+		
+		// Find the point that is the closest to the center of the patch. 
+		// Then classify all the facets in its vicinity
+		
+		unsigned SVM_mode = 0;
+		std::cout << "Select SVM Mode : 0 for semDescr, 1 for (d,h,a), 2 for all" << std::endl;
+		std::cin >> SVM_mode;
+		if(SVM_mode > 2)
+		{
+			SVM_mode = 0;
+		}
+		//for(unsigned mode = 0; mode < 3 ; ++mode)
+		//{
+		//	SVM_mode = mode;
+			std::cout << "Learn SVM : " << std::endl;
+			timer_tic();
+			component_ptr->learnSVMPatch(polyhedron_ptr,SVM_mode);
+			timer_toc();
+			
+			std::cout << "test SVM : " << std::endl;
+			timer_tic();
+			component_ptr->compareDescriptorWithSVM(polyhedron_ptr,SVM_mode);
+			timer_toc();
+			
+		
+			saveToPly("/home/leon/Desktop/svm_mode"+to_string(SVM_mode)+".ply",polyhedron_ptr);
+		//}
+		
+		
+		compareToDatasetSVM(component_ptr,meshID,SVM_mode);
+		viewer->recreateListsAndUpdateGL();
+	}
+	
 }
 
 void mepp_component_Correspondence_plugin::OnSVM()
@@ -263,7 +531,7 @@ void mepp_component_Correspondence_plugin::OnSVM()
 			int nbLabel = 4;
 			std::string meshIDString = polyhedron_ptr->pName;
 			unsigned posB = meshIDString.find_last_of("/");
-			unsigned posE = meshIDString.find_last_of(".ply");
+			unsigned posE = meshIDString.find_last_of(".obj");
 			
 			int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 			
@@ -283,7 +551,7 @@ void mepp_component_Correspondence_plugin::OnSVM()
 					
 				component_ptr->learnSVMClassifier(polyhedron_ptr);
 				
-				component_ptr->compareDescriptorToSVM(polyhedron_ptr);
+				component_ptr->compareDescriptorWithSVM(polyhedron_ptr);
 				
 				mw->statusBar()->showMessage(tr("SVM Correspondence is done"));
 				
@@ -367,7 +635,7 @@ void mepp_component_Correspondence_plugin::PaintStart(Viewer * view)
 		     pFacet!= polyhedron_ptr->facets_end(); pFacet++)
 		     {
 			Halfedge_around_facet_circulator hE = pFacet->facet_begin();
-			
+			m_facets.push_back(pFacet);
 			do{
 				Vertex_handle pVertex = hE->opposite()->vertex();
 				unsigned id = i;
@@ -406,11 +674,11 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 	closedir(dp);
 	
 	int nbLabel = 4;
-	SettingsDialog dial;
-	if (dial.exec() == QDialog::Accepted)
+	//SettingsDialog dial;
+	/*if (dial.exec() == QDialog::Accepted)
 	{
 		nbLabel = dial.spinBox->value();
- 	}
+ 	}*/
 	
 	PolyhedronPtr sourcePoly = sourceCorrespondence->get_polyhedron_ptr();
 	Polyhedron::Iso_cuboid mbbox = sourcePoly->bbox();
@@ -434,7 +702,9 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 				{
 					viewerI = (Viewer*)qobject_cast<QWidget *>(lwindow[j]->widget());
 					if(viewerI->getScenePtr()->get_polyhedron()->empty())
-					{	
+					{
+						QSize wSize = lwindow[j]->size();
+ 						lwindow[j]->resize(wSize.width()/2.0,wSize.height()/2.0);
 						std::cout << "File :"<< files[i] << std::endl;
 						viewerI->getScenePtr()->add_mesh(path+"/"+files[i].c_str(),0,NULL,viewerI);
 						if(viewerI->getScenePtr()->get_polyhedron()->empty())
@@ -458,6 +728,7 @@ void mepp_component_Correspondence_plugin::compareToDataset(Correspondence_Compo
 						component_ptr->setEllipse(sourceCorrespondence->getEllipse());
 						component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
 						component_ptr->compareDescriptorToEllipse(polyhedron_ptr);
+						component_ptr->m_segCtr.tagVerticesAfterCorrespondence();
 						viewerI->recreateListsAndUpdateGL();
 					}
 				}
@@ -536,7 +807,7 @@ void mepp_component_Correspondence_plugin::compareToDatasetMahalanobis(Correspon
 	
 }
 
-void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID)
+void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID, unsigned SVM_mode)
 {	
 	Viewer* viewerI = NULL;
 	std::vector<std::string> files;
@@ -565,8 +836,9 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 		
 		if(!isHidden)
 		{
+			bool isOBJ = (files[i].substr(len-3)=="obj");
 			bool isPLY = (files[i].substr(len-3)=="ply");
-			if(isPLY)
+			if(true)
 			{
 				emit(mw->get_actionNewEmpty()->trigger());
 				
@@ -581,6 +853,8 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 						std::string meshIDString = polyhedron_ptr->pName;
 						unsigned posB = meshIDString.find_last_of("/");
 						unsigned posE = meshIDString.find_last_of(".ply");
+						if(isPLY){ posE = meshIDString.find_last_of(".ply"); }
+						if(isOBJ){ posE = meshIDString.find_last_of(".obj"); }
 						int meshID = atoi(meshIDString.substr(posB+1 ,posE).c_str());
 						
 						if(meshID == sourceID)
@@ -589,11 +863,19 @@ void mepp_component_Correspondence_plugin::compareToDatasetSVM(Correspondence_Co
 						Correspondence_ComponentPtr component_ptr = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(viewerI, polyhedron_ptr);
 						
 						component_ptr->initParameters(nbLabel,meshID,dir);	
-						component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));
+						bool descrRead = component_ptr->readDescriptor(polyhedron_ptr,meshIDString.substr(0,posB));
 						
+						if(!descrRead)
+						{continue;}
 						component_ptr->setSVM(sourceCorrespondence->getSVM());
+						component_ptr->setNbCandidates(sourceCorrespondence->getNbCandidates());
+						component_ptr->setRadius(sourceCorrespondence->getRadius());
+						component_ptr->setCentreDescriptor(sourceCorrespondence->getCentreDescr());
+						component_ptr->featureSTD = sourceCorrespondence->featureSTD;
+						component_ptr->featureMeans = sourceCorrespondence->featureMeans;
+						//component_ptr->compareDescriptorToSVM(polyhedron_ptr);
 						
-						component_ptr->compareDescriptorToSVM(polyhedron_ptr);
+						component_ptr->compareDescriptorWithSVM(polyhedron_ptr,SVM_mode);
 				
 						viewerI->recreateListsAndUpdateGL();
 					}
@@ -803,23 +1085,53 @@ void mepp_component_Correspondence_plugin::OnSaveParts()
 	ScenePtr scene = mainViewer->getScenePtr();
 	
 	// Select directory
-	QString path = QFileDialog::getExistingDirectory (mw, tr("Choose directory to save parts"),"/home/leon/");	
+	QString path = QFileDialog::getExistingDirectory(mw, tr("Choose directory to save parts"),"/home/leon/");	
 	std::string directory = path.toStdString();
-	
 	
 	// Save all polyhedron data and descriptor to directory
 	for(unsigned i=0; i<scene->get_nb_polyhedrons();++i)
 	{
 		PolyhedronPtr p = scene->get_polyhedron(i);
-		p->keep_largest_connected_components(1);
-		Correspondence_ComponentPtr corres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer,p);
+		//p->keep_largest_connected_components(1);
+		//Correspondence_ComponentPtr corres = findOrCreateComponentForViewer<Correspondence_ComponentPtr, Correspondence_Component>(mainViewer,p);
 		std::stringstream filename; 
-		filename << directory << "/" << i << ".off";
-		corres->initParameters(4,i,directory);
-		corres->getShape().m_meshID = i;
-		corres->saveDescriptor(p,directory);
-		corres->m_segCtr.unionSegments(mainViewer);
-		p->write_off(filename.str(),true,true);
+		filename << directory << "/" << i << ".ply";
+		//corres->initParameters(4,i,directory);
+		//corres->getShape().m_meshID = i;
+		//corres->saveDescriptor(p,directory);
+		//corres->m_segCtr.unionSegments(mainViewer);
+		//p->write_off(filename.str(),true,true);
+		std::ofstream file(filename.str().c_str());
+		file << "ply\n";
+		file << "format ascii 1.0\n";
+		file << "element vertex " << p->size_of_vertices() << "\n";
+		file << "property float x\n";
+		file << "property float y\n";
+		file << "property float z\n";
+		file << "property uchar red\n";
+		file << "property uchar green\n";
+		file << "property uchar blue\n";
+		file << "element face "<< p->size_of_facets() << "\n";
+		file << "property list uchar int vertex_indices\n";
+		file << "end_header\n";
+		p->set_index_vertices();
+		for(auto pVertex = p->vertices_begin(); pVertex != p->vertices_end(); ++pVertex)
+		{
+			Point3d point = pVertex->point();
+			file << point.x() << " " << point.y() << " " << point.z() <<" ";
+			file << (int)pVertex->color(0)*255 << " " << (int)pVertex->color(1)*255 << " " << (int)pVertex->color(2)*255 << "\n";
+		}
+		for(auto pFacet = p->facets_begin(); pFacet != p->facets_end(); ++pFacet)
+		{
+			Halfedge_around_facet_circulator hE = pFacet->facet_begin();
+			file << "3 ";
+			do{
+				file << hE->vertex()->tag() << " ";
+				
+			}while(++hE!=pFacet->facet_begin());
+			file << "\n";
+		}
+		file.close();
 	}
 	
 }
@@ -958,6 +1270,7 @@ void mepp_component_Correspondence_plugin::OnAddSegment()
 		std::cout << "After adding polyhedron " << std::endl;
 		mainViewer->recreateListsAndUpdateGL();
 		
+		mainSegCtr.unionSegments(mainViewer);
 		mainSegCtr.alignSegments(mainViewer,mainPolyhedron,secondaryPolyhedron,currentMainViewer,mainViewer->get_nb_frames()-1);
 		std::cout << "After alignSegments " << std::endl;
 		
@@ -1310,6 +1623,40 @@ void mepp_component_Correspondence_plugindrawConnections(Viewer* viewer, int fra
 		
 }
 
+void saveToPly(std::string filename, PolyhedronPtr p)
+{
+	std::ofstream file(filename.c_str());
+	file << "ply\n";
+	file << "format ascii 1.0\n";
+	file << "element vertex " << p->size_of_vertices() << "\n";
+	file << "property float x\n";
+	file << "property float y\n";
+	file << "property float z\n";
+	file << "property uchar red\n";
+	file << "property uchar green\n";
+	file << "property uchar blue\n";
+	file << "element face "<< p->size_of_facets() << "\n";
+	file << "property list uchar int vertex_indices\n";
+	file << "end_header\n";
+	p->set_index_vertices();
+	for(auto pVertex = p->vertices_begin(); pVertex != p->vertices_end(); ++pVertex)
+	{
+		Point3d point = pVertex->point();
+		file << point.x() << " " << point.y() << " " << point.z() <<" ";
+		file << (int)(pVertex->color(0)*255) << " " << (int)(pVertex->color(1)*255) << " " << (int)(pVertex->color(2)*255) << "\n";
+	}
+	for(auto pFacet = p->facets_begin(); pFacet != p->facets_end(); ++pFacet)
+	{
+		Halfedge_around_facet_circulator hE = pFacet->facet_begin();
+		file << "3 ";
+		do{
+			file << hE->vertex()->tag() << " ";
+			
+		}while(++hE!=pFacet->facet_begin());
+		file << "\n";
+	}
+	file.close();
+}
 
 #if QT_VERSION < 0x050000
 Q_EXPORT_PLUGIN2(mepp_component_Correspondence_plugin, mepp_component_Correspondence_plugin);

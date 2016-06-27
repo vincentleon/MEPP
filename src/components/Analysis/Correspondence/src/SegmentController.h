@@ -68,11 +68,19 @@ public:
 	
 	void cutSegments();
 	
+	void cutCC( const int tagCC );
+	
+	void cutComplementCC( const int tagCC );
+	
+	void tagVerticesAfterCorrespondence();
+	
 	double energyBorder(Halfedge_handle prev, Halfedge_handle curr, Halfedge_handle next,double alpha = 0.2, double beta = 0.8);
 	
 	void moveBorder(std::vector<Halfedge_handle> & snake);
 	
 	void getBorder();
+	
+	std::list<PolyhedronPtr> & getPolyhedronToMerge();
 	
 	void optimizeBorders();
 	
@@ -91,6 +99,8 @@ public:
 	void remesh(Viewer *v, PolyhedronPtr target, PolyhedronPtr model);
 	
 	void softICP(Viewer * v, PolyhedronPtr target, PolyhedronPtr model, double elasticity, double regionSize, int itermax);
+	
+	void softICP(Viewer * v, PolyhedronPtr target, double elasticity, double regionSize, int itermax);
 	
 	void fuseMeshes(Viewer *v, PolyhedronPtr target, PolyhedronPtr model);
 	
@@ -120,9 +130,16 @@ public:
 	
 	softICPController * m_icp;
 	
+	std::map<Vertex_iterator,int>  m_ccMap;
+	std::map<Vertex_iterator,bool> m_isSelected;
+	
 private:
 	
 	PolyhedronPtr m_polyhedron;
+	
+	
+	
+	
 	
 };
 
@@ -179,6 +196,23 @@ public:
 	}
 };
 
+template<class HDS> 
+class vertID_init : public CGAL::Modifier_base<HDS> {
+public:
+	void operator()(HDS& hds)
+	{
+		unsigned vid = 0;
+		for(auto pVertex = hds.vertices_begin(); 
+			pVertex!= hds.vertices_end();
+			++pVertex)
+		    {
+			pVertex->tag() = vid;
+			++vid;
+		    }
+	}
+};
+	
+
 
 void visitVertexSelection(Halfedge_around_vertex_circulator h,
 			  std::map<Vertex_iterator,bool> & isSelected, 
@@ -205,6 +239,8 @@ Point3d toPartFrame(Viewer * v, int p, Point3d wcp);
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2);
 
 simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p);
+
+constructPolyhedron * convertToConstructPolyhedron(PolyhedronPtr p);
 
 PolyhedronPtr convertToEnrichedPolyhedron(simplePolyhedron * p);
 

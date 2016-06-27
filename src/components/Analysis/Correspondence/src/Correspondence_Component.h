@@ -21,13 +21,25 @@
 
 #include "CGAL/Linear_algebraCd.h"
 
+#include "../components/Analysis/Curvature/src/Curvature_Component.h"
+
 #include "../components/Analysis/Correspondence/src/SegmentController.h"
 
 #include "svm.h"
 
+#include <eigen3/Eigen/Eigenvalues>
+
 
 typedef CGAL::Linear_algebraCd<double>::Matrix myMatrix;
 typedef CGAL::Linear_algebraCd<double>::Vector myVector;
+
+
+struct VertDistOrdering {
+	bool operator ()(std::pair<Vertex_handle, double> const& a, std::pair<Vertex_handle, double> const& b)
+	{
+		return (a.second) < (b.second);
+	}
+};
 
 /*!
  * \class Correspondence_Component
@@ -46,7 +58,7 @@ class Correspondence_Component :
 		
 		void learnDescriptor(PolyhedronPtr p, std::string meshDir);
 		
-		void readDescriptor(PolyhedronPtr p,std::string meshDir, bool normalize=true);
+		bool readDescriptor(PolyhedronPtr p,std::string meshDir, bool normalize=true);
 		
 		void showDescriptor(PolyhedronPtr p, int dim);
 		
@@ -55,6 +67,8 @@ class Correspondence_Component :
 		void initializeEllipsoid(PolyhedronPtr p);
 		
 		void compareDescriptorToEllipse(PolyhedronPtr p);
+		
+		void compareDescriptorWithSVM(PolyhedronPtr p, unsigned SVM_mode=0);
 		
 		void compareDescriptorToEllipseRotation(PolyhedronPtr p);
 		
@@ -69,6 +83,8 @@ class Correspondence_Component :
 		void computeGaussianParameters(PolyhedronPtr p);
 		
 		void learnSVMClassifier(PolyhedronPtr p);
+		
+		void learnSVMPatch(PolyhedronPtr p, unsigned SVM_mode=0);
 		
 		double computeEnergy(const std::vector<double> & ellipse);
 		
@@ -90,6 +106,9 @@ class Correspondence_Component :
 		double getDeterminant() const;
 		double getThreshold() const;
 		svm_model * getSVM() const;
+		double getRadius() const;
+		int getNbCandidates() const;
+		
 		
 		void setMatrix(const myMatrix & m);
 		void setVector(const myVector & v);
@@ -97,6 +116,8 @@ class Correspondence_Component :
 		void setDeterminant(double det);
 		void setThreshold(double thresh);
 		void setSVM(svm_model * svm);	
+		void setRadius(double radius);
+		void setNbCandidates(int nbCandidates);
 		
 		SegmentController m_segCtr;
 		
@@ -106,6 +127,10 @@ class Correspondence_Component :
 		void saveDescriptor(PolyhedronPtr p,std::string meshDir);
 		
 		Analysis::Shape & getShape(){return m_Shape;}
+		
+		std::vector<double> featureMeans;
+		std::vector<double> featureSTD;
+		
 	private : 
 		
 		int m_nbLabel;
@@ -115,6 +140,9 @@ class Correspondence_Component :
 		std::vector<double> m_centreDescriptor;
 		
 		double m_isolineValue;
+		
+		double m_patchRadius;
+		int m_nbCandidates;
 		
 		std::vector<double> m_maxVector;	
 		
@@ -142,15 +170,15 @@ class Correspondence_Component :
 		
 		
 		void initGeodesicMesh(PolyhedronPtr p);
-		
-		
-		
+
 		void initMaxVector(PolyhedronPtr p);
 		void normalize(std::vector<double> & descr);
 		void computeDescriptorAllVertices(PolyhedronPtr p);
 		void computeGeodesicDistancesAllVertices(PolyhedronPtr p);
 		
 		std::vector<double> & getClosetVertexDescriptor(PolyhedronPtr p, Point3d pt);
+		
+		void getInRadius(PolyhedronPtr p, Vertex_handle c, double radius, std::set<Vertex_handle> & vertices);
 		
 		Vertex_handle getSelectionCenter();
 		Vertex_handle getFurtherFromSelectionCenter();
@@ -169,7 +197,21 @@ double objectiveFunRotation(const std::vector<double> & ellipse, std::vector<dou
 
 double objectiveFunGaussian(const std::vector<double> & threshold, std::vector<double> & grad, void *data);
 
+bool sphere_clip_vector(Point3d &O, double r,const Point3d &P, Vector &V);
 
+void vector_times_transpose_multi(long double pVector[3],long double ppMatrix[3][3], double coeff);
+
+void addM(long double pMatrix[3][3], long double pMatrixSum[3][3]);
+
+double fix_sin(double sine);
+
+double areaFace(Facet_handle &f);
+
+void principal_curv(Vertex_handle pVertex, long double ppMatrix_sum[3][3], int size);
+
+void computePatchBasis(std::vector<Vertex_handle> & sel, Enriched_kernel::Vector_3 & U, Enriched_kernel::Vector_3 & V, Enriched_kernel::Vector_3 & N);
+
+Halfedge_handle create_center_vertex_with_descriptor( PolyhedronPtr p, Facet_iterator f, int nbLabel);
 
 #endif
 

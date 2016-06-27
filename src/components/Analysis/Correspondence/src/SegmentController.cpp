@@ -14,9 +14,11 @@
 
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 
+#include <CGAL/Polygon_mesh_processing/connected_components.h>
+
 #include "softICPController.h"
 
-
+namespace PMP = CGAL::Polygon_mesh_processing;
 
 
 SegmentController::SegmentController(PolyhedronPtr p) : m_polyhedron(p)
@@ -194,7 +196,7 @@ void SegmentController::getBorder()
 		{
 			do
 			{
-				isFaceSelected[pFacet]=true;
+					isFaceSelected[pFacet]=true;
 			}
 			while(++h!=pFacet->facet_begin());	
 		}
@@ -278,6 +280,67 @@ void SegmentController::optimizeBorders()
 	}
 }
 
+void SegmentController::tagVerticesAfterCorrespondence()
+{
+	
+	unsigned idSelectedCC = 1;
+	int idUnselectedCC = -1;
+	
+	/* put proper values in m_ccMap and m_isSelected */
+	for(Facet_iterator pFacet = m_polyhedron->facets_begin();
+	    pFacet!=m_polyhedron->facets_end();++pFacet)
+	{
+		bool facetBelongs = false;
+		int nbBelongs = 0;
+		Halfedge_around_facet_circulator h = pFacet->facet_begin();
+		do
+		{
+			Vertex_handle v = h->vertex();
+			facetBelongs = facetBelongs || isColoredBlack(v);
+			if(isColoredBlack(v))
+			{
+				nbBelongs++;
+			}
+			
+		}while(++h!=pFacet->facet_begin());
+		
+		if(nbBelongs>=2)
+		{
+			do
+			{
+				m_isSelected[h->vertex()] = true;
+			}
+			while(++h!=pFacet->facet_begin());
+		}
+	}
+	for(Vertex_iterator pVertex = m_polyhedron->vertices_begin();
+	    pVertex!=m_polyhedron->vertices_end();++pVertex)
+	{
+		if(m_ccMap[pVertex] == 0) // this vertex has not been visited
+		{
+			if(m_isSelected[pVertex]) // part of segment
+			{
+				idSelectedCC = idSelectedCC + 1;
+				m_ccMap[pVertex] = idSelectedCC;
+				
+				Halfedge_around_vertex_circulator h = pVertex->vertex_begin();
+				visitVertexSelection(h,m_isSelected,m_ccMap,idSelectedCC);
+				pVertex->color(1.0,0.0,0.0);
+			}
+			else // part of main mesh
+			{
+				idUnselectedCC = idUnselectedCC - 1;
+				m_ccMap[pVertex] = idUnselectedCC;
+				
+				Halfedge_around_vertex_circulator h = pVertex->vertex_begin();
+				visitVertexSelection(h,m_isSelected,m_ccMap,idUnselectedCC);
+			}
+		}
+	}
+	
+	
+	
+}
 
 
 void SegmentController::cutSegments()
@@ -423,6 +486,170 @@ void SegmentController::cutSegments()
 		p->calc_nb_components();
 	}
 }
+
+void SegmentController::cutCC( const int tagCC )
+{
+	std::vector<double> coords;
+	std::vector<int> tris;
+	
+	for(Vertex_iterator pVertex = m_polyhedron->vertices_begin();
+	    pVertex != m_polyhedron->vertices_end(); 
+		++pVertex)
+	{
+		Point3d pp = pVertex->point();
+		coords.push_back(pp.x());
+		coords.push_back(pp.y());
+		coords.push_back(pp.z());
+		if(m_ccMap[pVertex] == tagCC)
+		{
+			pVertex->color(0.0,1.0,0.0);
+		}
+	}
+	std::cout << "cut CC with label "<< tagCC << std::endl;
+	
+	for(Facet_iterator pFacet = m_polyhedron->facets_begin();
+		pFacet!=m_polyhedron->facets_end();++pFacet)
+	{
+			bool facetBelongs = false;
+			int nbBelongs = 0;
+			Halfedge_around_facet_circulator h = pFacet->facet_begin();
+			do
+			{
+				facetBelongs = facetBelongs || (m_ccMap[h->vertex()] == tagCC);
+				if((m_ccMap[h->vertex()] == tagCC))
+				{
+					nbBelongs++;
+				}
+			}
+			while(++h!=pFacet->facet_begin());
+			h = pFacet->facet_begin();
+			
+			if(nbBelongs>=2)
+			{
+				do
+				{
+					tris.push_back(h->vertex()->tag());
+					
+				}
+				while(++h!=pFacet->facet_begin());
+			}
+	}
+	PolyhedronPtr p(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	
+	p->delegate(builder);
+	
+	if(p->size_of_facets() != 0)
+	{
+			if(tagCC>0)
+			{	
+				m_parts.push_back(p);
+			}
+			else 
+			{	
+				m_mainPart.push_back(p);
+			}
+	}
+	p->compute_bounding_box();
+	p->compute_normals();
+}
+
+void SegmentController::cutComplementCC(const int tagCC)
+{	
+	
+	std::cout << "cut complement "<< tagCC << std::endl;
+	// Get a polyhedron with several CC
+	std::vector<double> coords;
+	std::vector<int> tris;
+	for(Vertex_iterator pVertex = m_polyhedron->vertices_begin();
+	    pVertex != m_polyhedron->vertices_end(); 
+		++pVertex)
+	{
+		Point3d pp = pVertex->point();
+		coords.push_back(pp.x());
+		coords.push_back(pp.y());
+		coords.push_back(pp.z());
+	}
+	
+	for(Facet_iterator pFacet = m_polyhedron->facets_begin();
+		pFacet!=m_polyhedron->facets_end();++pFacet)
+	{
+			bool facetBelongs = false;
+			int nbBelongs = 0;
+			Halfedge_around_facet_circulator h = pFacet->facet_begin();
+			do
+			{
+				facetBelongs = facetBelongs || (m_ccMap[h->vertex()] != tagCC);
+				if((m_ccMap[h->vertex()] != tagCC))
+				{
+					nbBelongs++;
+				}
+			}
+			while(++h!=pFacet->facet_begin());
+			h = pFacet->facet_begin();
+			
+			if(nbBelongs>=2)
+			{
+				do
+				{
+					tris.push_back(h->vertex()->tag());
+					
+				}
+				while(++h!=pFacet->facet_begin());
+			}
+	}
+	PolyhedronPtr p(new Polyhedron);
+	polyhedron_builder<HalfedgeDS> builder(coords,tris);
+	p->delegate(builder);
+	vertID_init<HalfedgeDS> vid_init;
+	p->delegate(vid_init);
+	isolatedVertices_remover<HalfedgeDS> isoRem;
+	p->delegate(isoRem);
+	
+	
+	tris.clear();
+	const int nb = p->calc_nb_components(); // now each face is tagged with #CC
+	
+	p->tag_facets(0);
+	int c = 1;
+	for(auto pFacet = p->facets_begin();
+	    pFacet != p->facets_end();
+		++pFacet)
+	    {
+		if(pFacet->tag() == 0)
+		{
+			p->tag_component(pFacet,0,c);
+			c++;
+		}
+	    }
+	
+	for(unsigned cc = 1; cc <= nb; ++cc)
+	{	
+		for(auto pFacet = p->facets_begin();
+		    pFacet != p->facets_end();
+			++pFacet)
+		    {
+			if(pFacet->tag() == cc)
+			{
+				Halfedge_around_facet_circulator h = pFacet->facet_begin();
+				do
+				{
+					tris.push_back(h->vertex()->tag());
+				}
+				while(++h!=pFacet->facet_begin());
+			}
+		    }
+		polyhedron_builder<HalfedgeDS> partBuilder(coords,tris);
+		PolyhedronPtr mpart(new Polyhedron);
+		mpart->delegate(partBuilder);
+		isolatedVertices_remover<HalfedgeDS> partIsoRem;
+		mpart->delegate(partIsoRem);
+		mpart->compute_bounding_box();
+		m_mainPart.push_back(mpart);
+		tris.clear();
+	}
+}
+
 
 PolyhedronPtr SegmentController::fillHoles(PolyhedronPtr p)
 {
@@ -848,6 +1075,11 @@ void SegmentController::joinSegments(Viewer * v)
 	/////////////////////////////////////////////////////////
 	
 	
+}
+
+std::list<PolyhedronPtr> & SegmentController::getPolyhedronToMerge()
+{
+	return m_icp->getPolyhedronToMerge();
 }
 
 void SegmentController::glueSegments(Viewer * v)
@@ -1470,14 +1702,20 @@ void SegmentController::fitSegments(Viewer * v, PolyhedronPtr target, Polyhedron
 
 void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr t,int sourceFrameID, int targetFrameID)
 {
+	std::cout << "alignSegments start" << std::endl;
+	std::cout << "sourceFrameID " << sourceFrameID << std::endl;
+	std::cout << "targetFrameID " << targetFrameID << std::endl;
 	isolatedVertices_remover<HalfedgeDS> verticeRemover;
 	s->delegate(verticeRemover);
 	t->delegate(verticeRemover);
+	
+	std::cout << "isovert remover" << std::endl;
 	
 	unsigned sizeS = s->size_of_vertices();
 	unsigned sizeT = t->size_of_vertices();
 	colorMesh(s,1,1,0);
 	colorMesh(t,0,1,1);
+	std::cout << "colorMesh" << sizeS << " " << sizeT << std::endl;
 	
 	double* S = new double[3*sizeS];
 	double* T = new double[3*sizeT];
@@ -1491,6 +1729,7 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 		S[vS*3+2] = wcp.z();
 		++sVertex;
 	}
+	std::cout << "toWorld source" << std::endl;
 	
 	auto tVertex = t->vertices_begin();
 	for(unsigned vT=0; vT < sizeT; ++vT,++tVertex)
@@ -1501,6 +1740,7 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 		T[vT*3+2] = wcp.z();
 		++tVertex;
 	}
+	std::cout << "toWorld target" << std::endl;
 	
 	//Initialization
 	Matrix R = Matrix::eye(3);
@@ -1509,6 +1749,8 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 	
 	icp2.fit(T,sizeT,R,P,-1);
 
+	std::cout << "fit source/target OK" << std::endl;
+	
 	qglviewer::Quaternion Q;
 	double rData[3][3];
 	for(unsigned i=0;i<3;++i)
@@ -1520,8 +1762,12 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 	}
 	Q.setFromRotationMatrix(rData);
 	
+	std::cout << "set rotation & translation on frame " << targetFrameID << std::endl;
+	
 	v->frame(targetFrameID)->setTranslation(P.val[0][0],P.val[1][0],P.val[2][0]);
 	v->frame(targetFrameID)->setRotation(Q);
+	
+	std::cout << "set rotation & translation OK "<< std::endl;
 	
 	v->update();
 	v->recreateListsAndUpdateGL();
@@ -1531,6 +1777,7 @@ void SegmentController::alignSegments(Viewer* v, PolyhedronPtr s, PolyhedronPtr 
 double L2Dist(std::vector<double>& descr1, std::vector<double>& descr2)
 {
 	double dist = 0.0;
+	if(descr1.size() != descr2.size()){return 0.0;}
 	for(unsigned el = 0; el<descr1.size(); ++el)
 	{
 		double diff = descr1[el] - descr2[el];
@@ -1651,6 +1898,35 @@ simplePolyhedron * convertToSimplePolyhedron(PolyhedronPtr p)
 	
 	simplePolyhedron* sp(new simplePolyhedron);
 	polyhedron_builder<simplePolyhedron::HalfedgeDS> builder(coords,tris);
+	sp->delegate(builder);
+	return sp;
+}
+
+constructPolyhedron * convertToConstructPolyhedron(PolyhedronPtr p)
+{
+	std::vector<double> coords;
+	for(Vertex_iterator pVertex = p->vertices_begin();
+	    pVertex != p->vertices_end();++pVertex)
+	{
+		coords.push_back(pVertex->point().x());
+		coords.push_back(pVertex->point().y());
+		coords.push_back(pVertex->point().z());
+	}// collect all vertices for builder
+	p->set_index_vertices();
+	std::vector<int> tris;
+	for(Facet_iterator pFacet = p->facets_begin();
+	pFacet!=p->facets_end();++pFacet)
+	{
+		Halfedge_around_facet_circulator h = pFacet->facet_begin();
+		do
+		{
+			tris.push_back(h->vertex()->tag());
+		}
+		while(++h!=pFacet->facet_begin());
+	}
+	
+	constructPolyhedron* sp(new constructPolyhedron);
+	polyhedron_builder<constructPolyhedron::HalfedgeDS> builder(coords,tris);
 	sp->delegate(builder);
 	return sp;
 }
@@ -1796,12 +2072,75 @@ void SegmentController::softICP(Viewer* v, PolyhedronPtr target, PolyhedronPtr m
 	v->recreateListsAndUpdateGL();
 }
 
+void SegmentController::softICP(Viewer* v, PolyhedronPtr target, double elasticity, double regionSize, int itermax)
+{
+	std::set<int> gluedMeshes;
+	target->compute_normals();
+	unionSegments(v);
+	target->normalize_border();
+	Vertex_handle bv = target->border_halfedges_begin()->vertex();
+	
+	// m_mainPart contains all candidate parts for gluing
+	PolyhedronPtr closestPoly = target;
+	int closestIndex = -1;
+	double distmin = std::numeric_limits<double>::max();
+	for(unsigned i = 0; i < m_mainPart.size(); ++i)
+	{
+		std::cout << i << std::endl;
+		PolyhedronPtr p = m_mainPart[i];
+		// a new part can have several borders, a main part can only have one
+		if( p != target && (gluedMeshes.count(i)==0) )
+		{
+			p->normalize_border();
+			std::cout << "testing polygon : " << i << std::endl;
+			for(auto pHE = p->border_halfedges_begin(); pHE != p->halfedges_end(); ++pHE)
+			{
+				Point3d q = pHE->vertex()->point();
+				double dist = squared_distance(q,bv->point());
+				if(dist < distmin )
+				{
+					distmin = dist;
+					closestPoly = p;
+					closestIndex = i;
+				}
+			}
+		}
+	}
+	
+	
+	if(closestPoly!=target)
+	{
+		std::cout << "before softICP" << std::endl;
+		gluedMeshes.insert(closestIndex);
+		this->softICP(v,target,closestPoly,elasticity,regionSize,itermax);
+		std::cout << "after softICP" << std::endl;
+	}
+	target->compute_bounding_box();
+	closestPoly->compute_bounding_box();
+	// set Scene visibility
+	for(unsigned k=0; k<v->getScenePtr()->get_nb_polyhedrons(); ++k)
+	{
+		PolyhedronPtr p = v->getScenePtr()->get_polyhedron(k);
+		if( p == closestPoly || p == target)
+		{
+			v->getScenePtr()->setVisible(k,true);
+		}
+		else
+		{
+			v->getScenePtr()->setVisible(k,false);
+		}
+	}
+	this->remesh(v,target,closestPoly);
+}
+
 void SegmentController::remesh(Viewer* v, PolyhedronPtr target, PolyhedronPtr model)
 {
 	m_icp->remeshNew(v);
+	//m_icp->remeshTri(v);
+	//m_icp->remesh(v);
 	
-	v->getScenePtr()->todoIfModeSpace(v,0.0);
-	v->recreateListsAndUpdateGL();	
+	/*v->getScenePtr()->todoIfModeSpace(v,0.0);
+	v->recreateListsAndUpdateGL();	*/
 }
 
 

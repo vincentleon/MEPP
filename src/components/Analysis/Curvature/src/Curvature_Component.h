@@ -94,6 +94,8 @@ class Curvature_Component :
 		bool displayMaxDirections; 
 };
 
+void principal_curvature_per_vert(Vertex * pVertex, double ppMatrix_sum[3][3]);
+
 #endif
 
 #endif // Curvature_COMPONENT_H

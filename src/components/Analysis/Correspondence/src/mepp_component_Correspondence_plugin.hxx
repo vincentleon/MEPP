@@ -43,7 +43,7 @@ class mepp_component_Correspondence_plugin :
 #endif
 
 	public:
-		mepp_component_Correspondence_plugin() : mepp_component_plugin_interface(), m_icpOk(false) {}
+		mepp_component_Correspondence_plugin() : mepp_component_plugin_interface(), m_icpOk(false),m_selectedTarget(false), m_selectedModel(false), m_correspondenceDone(false) {}
 		~mepp_component_Correspondence_plugin()
 		{
 			delete actionCorrespondence;
@@ -172,7 +172,13 @@ class mepp_component_Correspondence_plugin :
 			if( actionRemeshing )
 			{
 				connect(actionRemeshing, SIGNAL(triggered()),this,SLOT(OnRemesh()));	
-			}		
+			}
+			
+			actionSVMCorrespondance = new QAction(tr("SVM Correspondance"),this);
+			if (actionSVMCorrespondance )
+			{
+				connect(actionSVMCorrespondance, SIGNAL(triggered()),this,SLOT(OnSVMCorrespondance()));	
+			}
 		}
 
 		QList<QAction*> actions() const
@@ -187,8 +193,8 @@ class mepp_component_Correspondence_plugin :
 				//<< actionGlue
 				//<< NULL // menu separator
 				//<< actionMahalanobis
-				//<< NULL // menu separator
-				//<< actionSVM
+				<< NULL // menu separator
+				<< actionSVMCorrespondance
 				//<< NULL // menu separator
 				//<< actionCompare
 				<< NULL // menu separator
@@ -223,7 +229,7 @@ class mepp_component_Correspondence_plugin :
 		
 		void compareToDataset(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
 		void compareToDatasetMahalanobis(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
-		void compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID);
+		void compareToDatasetSVM(Correspondence_ComponentPtr sourceCorrespondence, int sourceID, unsigned SVM_mode=0);
 		
 		void drawConnections(Viewer* viewer, int frame_i, int frame_j);
 		
@@ -231,6 +237,7 @@ class mepp_component_Correspondence_plugin :
 		
 		int getClickedVertex(PolyhedronPtr pMesh, double x, double y, int tolerance);
 		
+		void joinModels(Viewer * viewer, PolyhedronPtr target);
 		
 		QGLFramebufferObject * m_fbo;
 		std::set<int> m_paintedFacets;
@@ -244,6 +251,7 @@ class mepp_component_Correspondence_plugin :
 		void OnPainting();
 		void OnMahalanobis();
 		void OnSVM();
+ 		void OnSVMCorrespondance();
 		void OnCompareMethods();
 		void OnLearn();
 		void OnPrepareData();
@@ -282,15 +290,24 @@ class mepp_component_Correspondence_plugin :
     
     QAction *actionSoftICP;
     QAction *actionRemeshing;
+    QAction *actionSVMCorrespondance;
      
     bool m_hasNotBeenPainted;
     bool m_PaintingMode;
+    bool m_correspondenceDone;
+    bool m_selectedTarget;
+    bool m_selectedModel;
+    
+    int m_frameID_Target;
+    int m_frameID_Source;
     
     std::vector<std::string> getFileList(std::string message ="choose directory");
     
     
     
 };
+
+void saveToPly(std::string filename, PolyhedronPtr p);
 
 #endif
 

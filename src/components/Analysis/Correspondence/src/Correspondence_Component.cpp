@@ -10,13 +10,16 @@
 #include <sstream>
 #include <algorithm>
 #include <stdlib.h>
+#include <stack>
 	
 
 #include "../../../../mepp/mepp_component.h"
 
+
 #include "Correspondence_Component.h"
 #include "Correspondence_Polyhedron.h"
 #include "geodesic/geodesic_algorithm_exact.h"
+
 
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
@@ -107,7 +110,7 @@ void Correspondence_Component::saveDescriptor(PolyhedronPtr p,std::string meshDi
 	file.close();
 }
 
-void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDir, bool normalize)
+bool Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDir, bool normalize)
 {
 	Point3d bb = Point3d(p->xmin(),p->ymin(),p->zmin());
 	std::ifstream file;
@@ -146,6 +149,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDi
 	else
 	{
 		std::cout << "Impossible d'ouvrir le fichier "<<ss.str()<<" !\n";
+		return false;
 	}
 	if(normalize)
 	{
@@ -158,6 +162,7 @@ void Correspondence_Component::readDescriptor(PolyhedronPtr p,std::string meshDi
 			pVertex->setSemantic(descr);
 		}
 	}
+	return true;
 }
 
 void Correspondence_Component::showDescriptor(PolyhedronPtr p, int dim)
@@ -313,6 +318,206 @@ vector<double> & Correspondence_Component::getClosetVertexDescriptor(PolyhedronP
 	return localDescr;
 }
 
+void Correspondence_Component::compareDescriptorWithSVM(PolyhedronPtr p, unsigned SVM_mode)
+{
+	myVector mu = myVector(m_nbLabel);
+	myVector sig = myVector(m_nbLabel);
+	
+	unsigned resSize = 0;
+	
+	double radius = m_patchRadius;
+	
+	std::cout << "radius : " << radius << "nbCandidates : "<< m_nbCandidates << std::endl;
+	
+	std::vector<std::pair<Vertex_handle,double> > candidateVertices;
+	
+	for(Vertex_iterator pVertex = p->vertices_begin();
+	    pVertex!=p->vertices_end();++pVertex)
+	{
+		std::vector<double> & localdescr = pVertex->getSemantic();
+		double dist = L2Dist(localdescr,m_centreDescriptor);
+		candidateVertices.push_back(std::make_pair(pVertex,dist));
+	}
+	std::sort(candidateVertices.begin(), candidateVertices.end(), VertDistOrdering());
+
+	// Pour chacun des n candidats, construire un patch et classifier les sommets de ce patch
+	//std::map<Vertex_handle, double> labelMap;
+	std::vector<Vertex_handle> selVerts;
+	
+	for(unsigned i = 0; i < m_nbCandidates; ++i)
+	{
+		std::set<Vertex_handle> patch;
+		getInRadius(p,candidateVertices[i].first,radius,patch);
+		
+		
+		std::vector<Vertex_handle> patchV(patch.begin(), patch.end()); 
+		Enriched_kernel::Vector_3 U,V,N;
+		
+		if(SVM_mode != 2)
+		{
+			computePatchBasis(patchV,U,V,N);
+		}
+		
+		unsigned nbFeatures = m_nbLabel + 3;
+		if(SVM_mode == 1)
+		{
+			nbFeatures = 3;
+		}
+		else if (SVM_mode == 2)
+		{
+			nbFeatures = m_nbLabel;
+		}
+		
+		for(unsigned f = 0; f < nbFeatures ; ++f)
+		{
+			std::cout << featureMeans[f] << std::endl;
+		}
+		
+		for(auto it = patch.begin(); it!= patch.end(); ++it)
+		{
+			
+			Vertex_handle pVertex = *it;
+			//pVertex->color(0.0,1.0,0.0);
+			
+			std::vector<double> & descr = pVertex->getSemantic();
+			struct svm_node * x = Malloc(struct svm_node,nbFeatures+1);
+	
+			if(SVM_mode!=1)
+			{
+				unsigned l = 0;
+				for(l=0;l<m_nbLabel;++l)
+				{
+					x[l].index = l;
+					x[l].value = descr[l];
+				}
+			}
+			
+			
+			if (SVM_mode != 2)
+			{
+				Enriched_kernel::Vector_3 cv = candidateVertices[i].first->point()-pVertex->point();
+				Enriched_kernel::Vector_3 projcv_n = (cv*N)*N;
+				Enriched_kernel::Vector_3 projcv_uv = cv - projcv_n;
+				
+				double d = sqrt(cv.squared_length());
+				double h = sqrt(projcv_n.squared_length());
+				double normU = sqrt(U.squared_length());
+				double normProjcv_uv = sqrt(projcv_uv.squared_length());
+				double a = acos((U*projcv_uv)/(normU*normProjcv_uv + 0.0001)); 
+			
+				if(SVM_mode == 0)
+				{
+					x[m_nbLabel].index = m_nbLabel;
+					x[m_nbLabel].value = d;
+					x[m_nbLabel+1].index = m_nbLabel+1;
+					x[m_nbLabel+1].value = h;
+					x[m_nbLabel+2].index = m_nbLabel+2;
+					x[m_nbLabel+2].value = a;
+				}
+				else if(SVM_mode == 1)
+				{
+					x[0].index = 0;
+					x[0].value = d;
+					x[1].index = 1;
+					x[1].value = h;
+					x[2].index = 2;
+					x[2].value = a;
+				}
+			}
+
+			
+			x[nbFeatures].index = -1;
+			
+			for(unsigned f = 0; f < nbFeatures; ++f)
+			{
+				x[f].value = (x[f].value - featureMeans[f])/(2*featureSTD[f]+0.001);
+			}
+			
+			double predictedLabel = svm_predict(m_svmModel,x);
+			
+			//free(x);
+			
+			if(predictedLabel == 1)
+			{
+				resSize++;
+				pVertex->color(0.29,0.71,0.85);
+				
+				for(unsigned l=0;l<descr.size();++l)
+				{
+					mu[l]+=descr[l];
+				}
+				selVerts.push_back(pVertex);
+			}
+			else
+			{
+				pVertex->color(0.5,0.5,0.5);
+			}
+		}
+		candidateVertices[i].first->color(0.0,0.0,0.0);
+	}
+	std::cout << "end test SVM " << std::endl;
+	std::cout << " restSize : " << resSize << std::endl;
+	mu = (1.0/resSize)*mu;
+	
+	for(unsigned vid = 0; vid < selVerts.size(); ++vid)
+	{
+		Vertex_handle vs = selVerts[vid];
+		std::vector<double > & descr = vs->getSemantic();
+		for(unsigned l=0;l<descr.size();++l)
+		{	
+			double diff = descr[l]-mu[l];
+			sig[l]+= diff*diff;
+		}
+	}
+	sig = (1.0/resSize)*sig;
+	for(unsigned l=0;l<sig.dimension();++l)
+	{
+		sig[l] = sqrt(sig[l]);
+	}
+	
+	std::cout << "mean : " << mu << std::endl;
+	std::cout << "stdv " << sig << std::endl;
+}
+
+void Correspondence_Component::getInRadius(PolyhedronPtr p, Vertex_handle c, double radius, set< Vertex_handle >& vertices)
+{
+	Point3d O = c->point();
+	std::stack<Vertex_handle> S;
+	
+	S.push(c);
+	vertices.insert(c);
+	while(!S.empty())
+	{
+		Vertex_handle v = S.top();
+		S.pop();
+		Point3d P =v->point();
+		
+		Halfedge_around_vertex_circulator h = v->vertex_begin();
+		Halfedge_around_vertex_circulator pHalfedgeStart = h;
+		CGAL_For_all(h,pHalfedgeStart)
+		{
+			Point3d p1 = h->vertex()->point();
+			Point3d p2 = h->opposite()->vertex()->point();
+			Vector V = (p2-p1);
+			//if( v == p || V * (P - O) > 0.0)
+			//{
+				bool isect = sphere_clip_vector(O,radius, P, V);
+				if(!isect)
+				{
+					Vertex_handle w = h->opposite()->vertex();
+					if(vertices.find(w) == vertices.end())
+					{
+						
+						vertices.insert(w);
+						S.push(w);
+					}
+				}
+			//}
+		}
+	}
+}
+
+
 void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 {
 	std::cout << "Compare Descriptor to Ellipse : " << p->pName << std::endl;
@@ -337,7 +542,8 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		if(eqEll<=1)
 		{
 			++resSize;
-			pVertex->color(0,0,0);
+			pVertex->color(0.29,0.71,0.85);
+			
 			std::vector<double > & descr = pVertex->getSemantic();
 			for(unsigned l=0;l<descr.size();++l)
 			{
@@ -364,7 +570,7 @@ void Correspondence_Component::compareDescriptorToEllipse(PolyhedronPtr p)
 		}
 		if(eqEll<=1)
 		{
-			++resSize;
+			//++resSize;
 			
 			std::vector<double > & descr = pVertex->getSemantic();
 			for(unsigned l=0;l<descr.size();++l)
@@ -565,7 +771,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		Vertex_handle v = m_selection[i];
 		m_tag[v] = 1;
 		q.push_back(v);
-		//v->color(0,1,0);
+		v->color(1,0,0);
 	}
 	while(!q.empty())
 	{
@@ -588,7 +794,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		while(++he!=s->vertex_begin());
 	}
 
-	/*for(unsigned i=0; i<m_selection.size();++i)
+	for(unsigned i=0; i<m_selection.size();++i)
 	{
 		Vertex_handle v = m_selection[i];
 		if( m_tag[v] == 2 )
@@ -599,7 +805,7 @@ void Correspondence_Component::tagSelectionVertices(PolyhedronPtr p)
 		{
 			v->color(0,1,1);
 		}
-	}*/
+	}
 }
 
 void Correspondence_Component::readSelectionBasedOnColor(PolyhedronPtr p)
@@ -819,8 +1025,382 @@ void Correspondence_Component::computeGaussianParameters(PolyhedronPtr p)
 	std::cout << "\nthreshold : " << m_threshold << std::endl;
 }
 
+void Correspondence_Component::learnSVMPatch(PolyhedronPtr p, unsigned SVM_mode)
+{
+	p->compute_normals();
+	m_centreSelection = getSelectionCenter();
+	Vertex_handle furthest = getFurtherFromSelectionCenter();
+	m_patchRadius = sqrt(CGAL::squared_distance(m_centreSelection->point(),furthest->point()));
+	m_nbCandidates = 3;
+	
+	std::map<Vertex_handle,bool> isSelected;
+	for(unsigned s = 0; s<m_selection.size(); ++s)
+	{
+		isSelected[m_selection[s]] = true;
+		m_selection[s]->color(1.0,1.0,0.0);
+	}
+	
+	/* Increase number of samples for SVM */
+	// -> increase resolution
+	/*Facet_iterator bF = p->facets_begin();
+	Facet_iterator eF = p->facets_end(); --eF;
+
+	Facet_iterator f = bF;
+	do {
+		int countSel = 0;
+		auto hC = f->facet_begin();
+		do
+		{
+			if(m_tag[hC->vertex()]==1)
+			{countSel++;}
+			
+		}
+		while(++hC!=f->facet_begin());
+		if(countSel == 3)
+		{
+			//std::cout << "Create new vertex" << std::endl;
+			Halfedge_handle h = create_center_vertex_with_descriptor(p,f,m_nbLabel);
+			m_selection.push_back(h->vertex());
+			//isSelected[h->vertex()] = true;
+			h->vertex()->color(0.0,1.0,0.0);
+			m_tag[h->vertex()] = 1;
+		}
+	} while ( ++f != eF);*/
+	
+	p->compute_normals();
+	//std::cout << "getSelectionCenter()" << std::endl;
+	// Define the reference frame
+	//	1- Compute the average normal on the patch
+	Enriched_kernel::Vector_3 N;
+	for(unsigned s=0;s<m_selection.size();++s)
+	{
+		Enriched_kernel::Vector_3 n = m_selection[s]->normal();
+		N = N + n;
+	}
+	N = (1.0/m_selection.size())*N;
+	
+	//std::cout << "averagePatchNormal" << std::endl;
+	//	2- Compute the two principal directions of curvature on the patch
+	//Enriched_kernel::Vector_3 U,V;
+	
+	long double ppMatrix_sum[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+	
+	for(unsigned s=0; s<m_selection.size();++s)
+	{
+		principal_curv(m_selection[s],ppMatrix_sum,m_selection.size());	
+	}
+	//Eigen Values / Vector of ppMatrix_sum
+	//std::cout << "principal curv. per vert" << std::endl;
+	
+	std::cout << "m_selection size : " << m_selection.size() << std::endl;
+	
+	Eigen::Matrix<long double,3,3> mat;
+	mat.setZero();
+ 
+	mat << ppMatrix_sum[0][0], ppMatrix_sum[0][1], ppMatrix_sum[0][2],
+	ppMatrix_sum[1][0], ppMatrix_sum[1][1], ppMatrix_sum[1][2],
+	ppMatrix_sum[2][0], ppMatrix_sum[2][1], ppMatrix_sum[2][2];
+	
+	Eigen::EigenSolver<Eigen::Matrix<long double, 3, 3> > es(mat);
+	
+	auto eigVal = es.eigenvectors();
+	
+	double Ux,Uy,Uz,Vx,Vy,Vz;
+	Ux = eigVal(0,1).real(); Uy = eigVal(1,1).real(); Uz = eigVal(2,1).real();
+	Vx = eigVal(0,2).real(); Vy = eigVal(1,2).real(); Vz = eigVal(2,2).real();
+	Enriched_kernel::Vector_3 U(Ux,Uy,Uz);
+	Enriched_kernel::Vector_3 V(Vx,Vy,Vz);
+	std::cout << "Learning patch : U, V" << std::endl;
+	std::cout << Ux << " " << Uy << " " << Uz << std::endl;
+	std::cout << Vx << " " << Vy << " " << Vz << std::endl;
+	
+	// learn the svm classifier
+	svm_problem selectionProblem;
+	selectionProblem.l = m_selection.size();
+	std::vector<double> labels;
+	std::vector<svm_node*> inputs;
+	selectionProblem.x = Malloc(struct svm_node *, selectionProblem.l);
+	
+	unsigned nbFeatures = m_nbLabel+3;
+	if(SVM_mode == 1)
+	{
+		nbFeatures = 3;
+	}
+	else if(SVM_mode == 2)
+	{
+		nbFeatures = m_nbLabel;
+	}
+	
+	for(unsigned s=0; s<m_selection.size();++s)
+	{
+		Vertex_handle v = m_selection[s];
+		Enriched_kernel::Vector_3 cv = m_centreSelection->point()-v->point();
+		Enriched_kernel::Vector_3 projcv_n = (cv*N)*N;
+		Enriched_kernel::Vector_3 projcv_uv = cv - projcv_n;
+		
+ 		double d = sqrt(cv.squared_length());
+		double h = sqrt(projcv_n.squared_length());
+		double normU = sqrt(U.squared_length());
+		double normProjcv_uv = sqrt(projcv_uv.squared_length());
+		double a = acos((U*projcv_uv)/(normU*normProjcv_uv + 0.0001)); 
+		
+		/*std::cout << " a : " << a << std::endl;
+		std::cout << " normProjcv_uv : " << normProjcv_uv << std::endl;
+		std::cout << " arg : " << (U*projcv_uv)/(normU*normProjcv_uv + 0.0001) << std::endl;*/
+		//std::cout << " num : " << U << projcv_uv << std::endl;
+		//std::cout << " denom : " << normU << normProjcv_uv << std::endl;
+		
+		std::vector<double> & descr = m_selection[s]->getSemantic();
+		if(m_tag[m_selection[s]] == 1)
+		{
+ 			labels.push_back(1);
+			m_selection[s]->color(1.0,1.0,0.0);
+		}
+		else
+		{
+			labels.push_back(0);
+			m_selection[s]->color(0.0,1.0,1.0);
+		}
+		
+		selectionProblem.x[s] = Malloc(struct svm_node, nbFeatures+1);
+		if(SVM_mode != 1)
+		{
+			for(unsigned l=0;l<m_nbLabel;++l)
+			{
+				selectionProblem.x[s][l].index = l;
+				selectionProblem.x[s][l].value = descr[l];
+			}
+		}
+		if(SVM_mode == 0)
+		{
+			selectionProblem.x[s][m_nbLabel].index = m_nbLabel;
+			selectionProblem.x[s][m_nbLabel].value = d;
+			selectionProblem.x[s][m_nbLabel+1].index = m_nbLabel+1;
+			selectionProblem.x[s][m_nbLabel+1].value = h;
+			selectionProblem.x[s][m_nbLabel+2].index = m_nbLabel+2;
+			selectionProblem.x[s][m_nbLabel+2].value = a;
+		}
+		else if(SVM_mode == 1)
+		{
+			selectionProblem.x[s][0].index = 0;
+			selectionProblem.x[s][0].value = d;
+			selectionProblem.x[s][1].index = 1;
+			selectionProblem.x[s][1].value = h;
+			selectionProblem.x[s][2].index = 2;
+			selectionProblem.x[s][2].value = a;
+		}
+		
+		selectionProblem.x[s][nbFeatures].index = -1;
+	}
+	selectionProblem.y = labels.data();
+	
+	/*unsigned uu;
+	std::cin >> uu;*/
+	
+	/*for(unsigned s=0; s < m_selection.size();++s)
+	{
+		for(unsigned f = 0; f < nbFeatures; ++f)
+		{
+			std::cout << selectionProblem.x[s][f].value <<",";
+		}
+		if(labels[s]==1.0)
+		{
+			std::cout<<"selected"<<std::endl;
+		}
+		else
+		{
+			std::cout<<"not"<<std::endl;
+		}
+	}*/
+	
+	featureMeans.resize(nbFeatures,0.0);
+	featureSTD.resize(nbFeatures,0.0);
+	
+	for(unsigned f = 0; f < nbFeatures; ++f)
+	{
+		double mean = 0.0;
+		for(unsigned s = 0; s < m_selection.size(); ++s)
+		{
+			mean += selectionProblem.x[s][f].value;
+		}
+		featureMeans[f] = mean / m_selection.size();
+		
+	}
+	
+	for(unsigned f = 0; f < nbFeatures; ++f)
+	{
+		double std = 0.0;
+		for(unsigned s = 0; s < m_selection.size(); ++s)
+		{
+			double dev = selectionProblem.x[s][f].value - featureMeans[f];
+			selectionProblem.x[s][f].value = dev;
+			std += dev*dev;
+		}
+		featureSTD[f] = sqrt(std/m_selection.size());
+		/*if(f == (nbFeatures-1))
+		{
+			std::cout << std << std::endl;
+		}*/
+	}
+	
+	std::map<Vertex_handle,svm_node*> normalizedFeature;
+	
+	// normalize all features
+	for(unsigned f = 0; f < nbFeatures; ++f)
+	{
+		for(unsigned s = 0; s < m_selection.size(); ++s)
+		{
+			selectionProblem.x[s][f].value /= (2*featureSTD[f]+0.001);
+			
+		}
+		
+		
+	}
+	
+	for(unsigned s = 0; s < m_selection.size(); ++s)
+	{
+		normalizedFeature[m_selection[s]] = selectionProblem.x[s];
+	}
+	
+	//std::cout << "all features have been normalized" << std::endl;
+	
+	// Find best gamma parameter as median(median(dist(p,neigh(p))))
+	std::vector<double> medV;
+	for(unsigned s = 0; s < m_selection.size(); ++s)
+	{
+		Vertex_handle v = m_selection[s];
+		
+		std::vector<double> descriptor;
+		for(unsigned f = 0; f < nbFeatures; ++f)
+		{
+			descriptor.push_back(selectionProblem.x[s][f].value);
+		}
+		
+		std::vector<double> distNeigh;
+		
+		auto hC = v->vertex_begin();
+		do
+		{
+			Vertex_handle nV = hC->opposite()->vertex();
+			if(normalizedFeature.count(nV) == 0){continue;}
+			svm_node * nD = normalizedFeature[nV];
+			std::vector<double> nDescriptor;
+			for(unsigned f = 0; f < nbFeatures; ++f)
+			{
+				nDescriptor.push_back(nD[f].value);
+			}
+			double dist = L2Dist(descriptor,nDescriptor);
+			distNeigh.push_back(dist);
+			
+		}while(++hC!=v->vertex_begin());
+		
+		double medN = 0;
+		if(distNeigh.size() != 0)
+		{
+			std::sort(distNeigh.begin(),distNeigh.end());
+			double medN = distNeigh[(int)(distNeigh.size()/2.0)];
+			medV.push_back(medN);
+		}
+		
+	}
+	std::sort(medV.begin(),medV.end());
+	double median = medV[(int)(medV.size()/2.0)];
+	
+	// Set parameters for SVM classifier
+	struct svm_parameter param;
+	param.svm_type = C_SVC;
+	param.kernel_type = GAUSSIAN;
+	param.gamma = median;
+	param.C = pow(10,-5);
+	
+	param.eps = 0.5;
+	param.cache_size = 100;
+	param.shrinking = 1;
+	param.probability = 0;
+	param.nr_weight = 0;
+	param.weight_label = NULL;
+	param.weight = NULL;
+	
+	// grid search for svm parameters
+	/*int bestC = 0;
+	int bestG = 0;
+	int maxScore = 0;
+	for(int cExp = -30; cExp <=-5; cExp+=2)
+	{
+		for(int gExp = -30; gExp <= -15; gExp+=2)
+		{
+			param.gamma = pow(2,gExp);
+			param.C = pow(2,cExp);
+			m_svmModel = svm_train(&selectionProblem,&param);
+			int score = 0;
+			for(unsigned i = 0;i<labels.size();++i)
+			{
+				double predictedLabel = svm_predict(m_svmModel,selectionProblem.x[i]);
+				if(predictedLabel == labels[i])
+				{	
+					score++;
+				}
+			}
+			if(score >= maxScore)
+			{
+				bestC = cExp;
+				bestG = gExp;
+				maxScore = score;
+			}
+		}
+	}
+	std::cout << bestC<< " " << bestG << std::endl;
+	param.gamma = pow(2,bestG);
+	param.C = pow(2,bestC)
+	;*/
+	
+	m_svmModel = svm_train(&selectionProblem,&param);
+	
+	int score = 0;
+	for(unsigned i = 0; i < labels.size();++i)
+	{
+		double predictedLabel = svm_predict(m_svmModel,selectionProblem.x[i]);
+		//std::cout << "predicted label : " << predictedLabel << std::endl;
+		if(predictedLabel == labels[i])
+		{
+			score++;
+			//m_selection[i]->color(0.0,0.0,1.0);
+		}
+		else
+		{
+			//m_selection[i]->color(1.0,0.0,1.0);
+		}
+		
+		if(predictedLabel == 1)
+			{
+				m_selection[i]->color(1.0,1.0,0.0);
+			}
+			else
+			{
+				m_selection[i]->color(0.0,1.0,1.0);
+			}
+		//m_selection[i]->color(predictedLabel,0.0,1.0);
+		
+	}
+	std::cout << "Learning set score : " << score/(double)labels.size() << std::endl;
+	for(unsigned s=0;s<m_selection.size();++s)
+	{
+		free(selectionProblem.x[s]);
+	}
+	free(selectionProblem.x);
+	
+	std::cout << "SVM MODEL HAS BEEN TRAINED" << std::endl;
+	std::cout << "Size of training set : " << m_selection.size() << std::endl;	
+}
+
 void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 {	
+	m_centreSelection = getSelectionCenter();
+	Vertex_handle furthest = getFurtherFromSelectionCenter();
+	
+	m_patchRadius = 1.5*sqrt(CGAL::squared_distance(m_centreSelection->point(),furthest->point()));
+	m_nbCandidates = 3;
+	
 	svm_problem selectionProblem;
 	selectionProblem.l = m_selection.size();
 	std::vector<double> labels;
@@ -833,10 +1413,12 @@ void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 		if(m_tag[m_selection[s]] == 1)
 		{
  			labels.push_back(1);
+			m_selection[s]->color(1.0,1.0,0.0);
 		}
 		else
 		{
 			labels.push_back(0);
+			m_selection[s]->color(0.0,1.0,1.0);
 		}
 		
 		selectionProblem.x[s] = Malloc(struct svm_node, m_nbLabel+1);
@@ -865,6 +1447,8 @@ void Correspondence_Component::learnSVMClassifier(PolyhedronPtr p)
 	param.nr_weight = 0;
 	param.weight_label = NULL;
 	param.weight = NULL;
+	
+	param.C = pow(2,17);
 	
 	// grid search for svm parameters
 	int bestC = 0;
@@ -1139,8 +1723,7 @@ void Correspondence_Component::scaleMesh(Polyhedron::Iso_cuboid bbox, Polyhedron
 	double nx = nbox.xmax() - nbox.xmin();
 	double ny = nbox.ymax() - nbox.ymin();
 	double nz = nbox.zmax() - nbox.zmin();
-	
-	
+
 	double scale = 1.0;
 	
 	if(dx > std::max(dy,dz))
@@ -1164,6 +1747,25 @@ void Correspondence_Component::scaleMesh(Polyhedron::Iso_cuboid bbox, Polyhedron
 	}
 	p->compute_bounding_box();
 	p->compute_normals();
+}
+
+double Correspondence_Component::getRadius() const
+{
+	return m_patchRadius;
+}
+int Correspondence_Component::getNbCandidates() const
+{
+	return m_nbCandidates;
+}
+
+void Correspondence_Component::setRadius(double radius)
+{
+	m_patchRadius = radius;
+}
+
+void Correspondence_Component::setNbCandidates(int nbCandidates)
+{
+	m_nbCandidates = nbCandidates;
 }
 
 //// NON-MEMBER FUNCTIONS
@@ -1201,6 +1803,182 @@ double objectiveFunGaussian(const std::vector<double> & threshold, std::vector<d
 	return energy;
 }
 
+void vector_times_transpose_multi(long double pVector[3],
+                                               long double ppMatrix[3][3],
+                                               double coeff)
+{
+  for (int i=0;i<3;i++)
+    for (int j=0;j<3;j++)
+      ppMatrix[i][j] = coeff * pVector[i] * pVector[j];
+}
+
+//**********************************************
+// add two matrices
+//**********************************************
+void addM(long double pMatrix[3][3],
+                       long double pMatrixSum[3][3])
+{
+  for (int i=0;i<3;i++)
+    for (int j=0;j<3;j++)
+      pMatrixSum[i][j] += pMatrix[i][j];
+}
+
+//**********************************************
+// fix sine
+//**********************************************
+double fix_sin(double sine)
+{
+  if (sine >= 1)
+    return 3.14159/2;
+  else
+    if (sine <= -1)
+      return -3.14159/2;
+    else
+      return std::asin(sine);
+}
+
+ double areaFace(Facet_handle &f)
+	{
+		Halfedge_around_facet_circulator pHalfedge = f->facet_begin();
+		Point3d P = pHalfedge->vertex()->point();
+		Point3d Q = pHalfedge->next()->vertex()->point();
+		Point3d R = pHalfedge->next()->next()->vertex()->point();
+
+		Vector PQ=Q-P;
+                //Vector PR=R-P; // MT
+		Vector QR=R-Q;
+
+
+		Vector normal = CGAL::cross_product(PQ,QR);
+		double area=0.5*sqrt(normal*normal);
+
+		return area;
+
+	}
+
+void principal_curv(Vertex_handle pVertex, long double ppMatrix_sum[3][3], int size)
+{
+
+double area=0;
+
+  // iterate over all edges
+  Halfedge_around_vertex_circulator pHalfedge = pVertex->vertex_begin();
+  Halfedge_around_vertex_circulator pHalfedgeStart = pHalfedge;
+  CGAL_For_all(pHalfedge,pHalfedgeStart)
+  {
+
+    // build edge vector and comput its norm
+	Point3d p1 = pHalfedge->vertex()->point();
+	Point3d p2 = pHalfedge->opposite()->vertex()->point();
+	Vector edge = (p1-p2);
+	double len_edge = std::sqrt(edge*edge);
+	if (len_edge == 0) // avoid divide by zero
+	continue;
+
+	// compute (signed) angle between two incident faces, if exists
+	Facet_handle pFacet1 = pHalfedge->facet();
+	Facet_handle pFacet2 = pHalfedge->opposite()->facet();
+	CGAL_assertion(pFacet1 != pFacet2);
+	if (pFacet1 == NULL || pFacet2 == NULL)
+	continue; // border edge
+
+	area+=areaFace(pFacet1);
+
+	Vector normal1 = pFacet1->normal();
+	Vector normal2 = pFacet2->normal();
+
+	double sine = (CGAL::cross_product(normal1,normal2)*edge)/len_edge;
+	double beta = fix_sin(sine);
+
+	// compute edge * edge^t * coeff, and add it to current matrix
+	long double pVector_edge[3] = {edge.x(),edge.y(),edge.z()};
+	long double ppMatrix[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+	
+	
+	double factor = pow(10,size);
+	
+	
+	vector_times_transpose_multi(pVector_edge,ppMatrix,beta/(len_edge*factor));
+
+	addM(ppMatrix,ppMatrix_sum);
+  }
+  
+	for (int i=0;i<3;i++)
+		for (int j=0;j<3;j++)
+			ppMatrix_sum[i][j]/=area;
+}
+
+void computePatchBasis(std::vector<Vertex_handle> & sel, Enriched_kernel::Vector_3 &  U, Enriched_kernel::Vector_3 & V, Enriched_kernel::Vector_3 & N)
+{
+	for(unsigned s=0;s<sel.size();++s)
+	{
+		Enriched_kernel::Vector_3 n = sel[s]->normal();
+		N = N + n;
+	}
+	N = (1.0/sel.size())*N;
+	
+	//std::cout << "averagePatchNormal" << std::endl;
+	//	2- Compute the two principal directions of curvature on the patch
+	//Enriched_kernel::Vector_3 U,V;
+	
+	long double ppMatrix_sum[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+	
+	for(unsigned s=0; s<sel.size();++s)
+	{
+		principal_curv(sel[s],ppMatrix_sum,sel.size());
+	}
+	//Eigen Values / Vector of ppMatrix_sum
+	//std::cout << "principal curv. per vert" << std::endl;
+	
+	Eigen::Matrix<long double,3,3> mat;
+	mat.setZero();
+	mat << ppMatrix_sum[0][0], ppMatrix_sum[0][1], ppMatrix_sum[0][2],
+	ppMatrix_sum[1][0], ppMatrix_sum[1][1], ppMatrix_sum[1][2],
+	ppMatrix_sum[2][0], ppMatrix_sum[2][1], ppMatrix_sum[2][2];
+	
+	Eigen::EigenSolver<Eigen::Matrix<long double, 3, 3> > es(mat);
+	
+	auto eigVal = es.eigenvectors();
+	
+	double Ux,Uy,Uz,Vx,Vy,Vz;
+	Ux = eigVal(0,1).real(); Uy = eigVal(1,1).real(); Uz = eigVal(2,1).real();
+	Vx = eigVal(0,2).real(); Vy = eigVal(1,2).real(); Vz = eigVal(2,2).real();
+	
+	std::cout << "test patch : U, V" << std::endl;
+	std::cout << Ux << " " << Uy << " " << Uz << std::endl;
+	std::cout << Vx << " " << Vy << " " << Vz << std::endl;
+	
+	U = Enriched_kernel::Vector_3(Ux,Uy,Uz);
+	V = Enriched_kernel::Vector_3(Vx,Vy,Vz);
+}
+
+Halfedge_handle create_center_vertex_with_descriptor( PolyhedronPtr p, Facet_iterator f, int nbLabel) {
+    Vector vec( 0.0, 0.0, 0.0);
+    std::vector<double> descr(nbLabel,0.0);
+    std::size_t order = 0;
+    auto h = f->facet_begin();
+    
+    do {
+	std::vector<double> nDescr = h->vertex()->getSemantic();
+        vec = vec + ( h->vertex()->point() - CGAL::ORIGIN);
+        ++ order;
+	for(unsigned l = 0; l <nbLabel; ++l)
+	{
+		descr[l] = nDescr[l];
+	}
+    } while ( ++h != f->facet_begin());
+    CGAL_assertion( order >= 3); // guaranteed by definition of polyhedron
+    Point3d center =  CGAL::ORIGIN + (vec / static_cast<double>(order));
+    for(unsigned l = 0; l < nbLabel; ++l)
+    {
+	    descr[l]/=order;
+    }
+    Halfedge_handle new_center = p->create_center_vertex( f->halfedge());
+    new_center->vertex()->setSemantic(descr);
+    new_center->vertex()->point() = center;
+    new_center->vertex()->color(1.0,0.0,0.0);
+    return new_center;
+}
 
 
 #endif

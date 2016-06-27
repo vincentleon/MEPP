@@ -80,7 +80,15 @@ public:
 	
 	void remeshNew(Viewer *v);
 	
+	void remeshTri(Viewer *v);
+	
+	PolyhedronPtr fillHoles(PolyhedronPtr p);
+	
+	PolyhedronPtr fillHolesSimple(PolyhedronPtr p);
+	
 	std::map<Vertex_handle,Vertex_handle> m_Phi; // the snapping Region correspondence
+	
+	std::list<PolyhedronPtr> & getPolyhedronToMerge();
 	
 private:
 	
@@ -124,7 +132,11 @@ private:
 	
 	std::map<Vertex_handle,bool> is_tagged;
 	
+	std::list<PolyhedronPtr> m_toMerge;
+	
 	double getDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
+	
+	
 	
 	void getSnappingRegionAABB();
 	
@@ -158,6 +170,8 @@ private:
 	
 	std::vector<Vertex_handle> getCorrespondingNeighborhood( std::vector<Vertex_handle> & N);
 	
+	void moveBorder(bool order);
+	
 	double centerDistance(Facet_handle f);
 	
 	double computeDelta(bool order);
@@ -186,15 +200,23 @@ private:
 	
 	PolyhedronPtr stitchAndSmooth(PolyhedronPtr outMesh, PolyhedronPtr inMesh, std::set<Point3d> & borders);
 	
+	PolyhedronPtr stitchAndSmooth2(PolyhedronPtr outMesh, PolyhedronPtr inMesh, std::set<Point3d> & borders);
+	
 	void finalTransform(bool order, int iter, int itermax);
 	
 	void moveToCorrespondence(bool order);
+	
+	void smoothPointSet(std::vector<Point3d> & points, const unsigned k);
+	
+	
 };
 
 double computePhiDistance(Vertex_handle v1, Vertex_handle v2, double w1 = 0.4, double w2=0.2, double w3=0.4);
 
 void initGeodesicMesh(PolyhedronPtr p, geodesic::Mesh * g);
 
-bool sphere_clip_vector(Point3d &O, double r,const Point3d &P, Vector &V);
+bool sphere_clip_vectorG(Point3d &O, double r,const Point3d &P, Vector &V);
+
+
 
 #endif // SOFTICPCONTROLLER_H
